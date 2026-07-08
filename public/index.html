@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>每日游戏创意灵感日报</title>
+    <link rel="stylesheet" href="/styles.css?v=20260708-netlify" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">GR</div>
+          <div>
+            <h1>创意灵感日报</h1>
+            <p id="reportDate">正在读取</p>
+          </div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="视图">
+          <button class="nav-tab active" data-view="today" title="查看今日十张灵感卡片">今日</button>
+          <button class="nav-tab" data-view="favorites" title="查看收藏过的灵感">收藏</button>
+          <button class="nav-tab" data-view="history" title="查看历史日报">历史</button>
+          <button class="nav-tab" data-view="settings" title="调整推荐偏好">设置</button>
+        </nav>
+
+        <div class="control-panel">
+          <button id="refreshBtn" class="primary-btn" title="重新生成今日灵感日报">刷新今日推荐</button>
+          <label class="field">
+            <span>按游戏品类筛选</span>
+            <select id="gameCategoryFilter">
+              <option value="">全部游戏品类</option>
+              <option value="screw,nuts,bolts,pin">螺丝/插销解谜</option>
+              <option value="goods,sort,triple">货架/整理/分类</option>
+              <option value="match,tile,candy,blast">三消/Tile Match</option>
+              <option value="merge,mansion">合成/庄园</option>
+              <option value="makeover,home,room,decor">装修/改造</option>
+              <option value="hidden,object">找物/清理</option>
+              <option value="parking,jam">停车/堵塞</option>
+              <option value="idle,tycoon,factory">放置/经营</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>按灵感类型筛选</span>
+            <select id="typeFilter">
+              <option value="">全部灵感类型</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>按素材类型筛选</span>
+            <select id="assetFilter">
+              <option value="">全部素材类型</option>
+              <option value="ICON">ICON</option>
+              <option value="宣传图">宣传图</option>
+              <option value="活动图">活动图</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>按标签搜索</span>
+            <input id="tagSearch" type="search" placeholder="例如 puzzle / merge / royal" />
+          </label>
+          <div class="status" id="statusText">准备就绪</div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section id="todayView" class="view active">
+          <div class="section-head">
+            <div>
+              <h2>今日 10 张创意灵感</h2>
+              <p>每张图都带一个可转化成游戏想法的笔记。</p>
+            </div>
+            <span id="sourceSummary" class="summary-pill"></span>
+          </div>
+          <div id="cardsGrid" class="cards-grid"></div>
+        </section>
+
+        <section id="favoritesView" class="view">
+          <div class="section-head">
+            <div>
+              <h2>收藏夹</h2>
+              <p>你明确标记过值得继续看的方向。</p>
+            </div>
+          </div>
+          <div id="favoritesGrid" class="cards-grid"></div>
+        </section>
+
+        <section id="historyView" class="view">
+          <div class="section-head">
+            <div>
+              <h2>历史日报</h2>
+              <p>本地版会保留历史；部署版优先展示当前浏览器保存的内容。</p>
+            </div>
+          </div>
+          <div id="historyList" class="history-list"></div>
+          <div id="historyGrid" class="cards-grid"></div>
+        </section>
+
+        <section id="settingsView" class="view">
+          <div class="section-head">
+            <div>
+              <h2>偏好设置</h2>
+              <p>调整查询词、屏蔽标签、API Key 和基础数量。</p>
+            </div>
+          </div>
+          <form id="settingsForm" class="settings-form">
+            <label class="field">
+              <span>每日推荐数量</span>
+              <input id="dailyCount" type="number" min="1" max="30" />
+            </label>
+            <label class="field">
+              <span>提醒时间</span>
+              <input id="scheduleTime" type="time" />
+            </label>
+            <label class="field wide">
+              <span>偏好标签，一行一个</span>
+              <textarea id="preferredTags" rows="6"></textarea>
+            </label>
+            <label class="field wide">
+              <span>屏蔽标签，一行一个</span>
+              <textarea id="blockedTags" rows="6"></textarea>
+            </label>
+            <div class="settings-block wide">
+              <div class="settings-block-head">
+                <h3>API Key</h3>
+                <p>部署版会保存在当前浏览器本地；本地版会同时保存到本机数据文件。留空表示保留已有 key。</p>
+              </div>
+              <div class="secret-grid">
+                <label class="field">
+                  <span>Pexels API Key</span>
+                  <input id="pexelsApiKey" type="password" autocomplete="off" placeholder="未配置" />
+                  <small id="pexelsApiKeyStatus" class="secret-status"></small>
+                  <label class="inline-check"><input id="clearPexelsApiKey" type="checkbox" /><span>清空</span></label>
+                </label>
+                <label class="field">
+                  <span>Unsplash Access Key</span>
+                  <input id="unsplashAccessKey" type="password" autocomplete="off" placeholder="未配置" />
+                  <small id="unsplashAccessKeyStatus" class="secret-status"></small>
+                  <label class="inline-check"><input id="clearUnsplashAccessKey" type="checkbox" /><span>清空</span></label>
+                </label>
+                <label class="field">
+                  <span>OpenAI API Key</span>
+                  <input id="openaiApiKey" type="password" autocomplete="off" placeholder="未配置" />
+                  <small id="openaiApiKeyStatus" class="secret-status"></small>
+                  <label class="inline-check"><input id="clearOpenaiApiKey" type="checkbox" /><span>清空</span></label>
+                </label>
+                <label class="field">
+                  <span>OpenAI Model</span>
+                  <input id="openaiModel" type="text" autocomplete="off" placeholder="gpt-5-mini" />
+                  <small class="secret-status">用于生成每张图的灵感笔记。</small>
+                </label>
+                <label class="field wide">
+                  <span>OpenAI Base URL</span>
+                  <input id="openaiBaseUrl" type="text" autocomplete="off" placeholder="https://api.openai.com/v1" />
+                  <small class="secret-status">第三方接入填服务商给你的 OpenAI 兼容地址，例如 https://example.com/v1。</small>
+                </label>
+                <label class="field">
+                  <span>Pinterest Client ID</span>
+                  <input id="pinterestClientId" type="password" autocomplete="off" placeholder="可选" />
+                  <small id="pinterestClientIdStatus" class="secret-status"></small>
+                  <label class="inline-check"><input id="clearPinterestClientId" type="checkbox" /><span>清空</span></label>
+                </label>
+                <label class="field">
+                  <span>Pinterest Client Secret</span>
+                  <input id="pinterestClientSecret" type="password" autocomplete="off" placeholder="可选" />
+                  <small id="pinterestClientSecretStatus" class="secret-status"></small>
+                  <label class="inline-check"><input id="clearPinterestClientSecret" type="checkbox" /><span>清空</span></label>
+                </label>
+                <label class="field wide">
+                  <span>Pinterest Refresh Token</span>
+                  <input id="pinterestRefreshToken" type="password" autocomplete="off" placeholder="可选，官方授权后填写" />
+                  <small id="pinterestRefreshTokenStatus" class="secret-status"></small>
+                  <label class="inline-check"><input id="clearPinterestRefreshToken" type="checkbox" /><span>清空</span></label>
+                </label>
+              </div>
+            </div>
+            <label class="field wide">
+              <span>查询词包 JSON</span>
+              <textarea id="queryPacks" rows="16" spellcheck="false"></textarea>
+            </label>
+            <button class="primary-btn" type="submit">保存设置</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <template id="cardTemplate">
+      <article class="inspiration-card">
+        <a class="image-link" target="_blank" rel="noreferrer">
+          <img class="card-image" alt="" loading="lazy" />
+        </a>
+        <div class="card-body">
+          <div class="card-topline">
+            <span class="type-pill"></span>
+            <span class="asset-pill"></span>
+            <span class="score-pill"></span>
+          </div>
+          <h3></h3>
+          <p class="reason"></p>
+          <div class="idea-box">
+            <strong>游戏化想法</strong>
+            <p></p>
+          </div>
+          <div class="tags"></div>
+          <div class="meta"></div>
+          <div class="actions">
+            <button data-action="favorite" title="收藏这个方向">收藏</button>
+            <button data-action="skip" title="减少类似推荐">跳过</button>
+            <button data-action="more_like" title="之后多推荐类似方向">更多类似</button>
+            <button data-action="block_tag" title="屏蔽这张图的第一个标签">屏蔽标签</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js?v=20260708-netlify" type="module"></script>
+  </body>
+</html>

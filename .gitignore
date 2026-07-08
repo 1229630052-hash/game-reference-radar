@@ -1,0 +1,6 @@
+data/secrets.json
+data/feedback.json
+data/recommendations/
+cache/thumbs/
+logs/
+context.md

@@ -1,0 +1,22 @@
+{
+  "name": "game-reference-radar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Daily game creative inspiration radar with local reports and feedback learning.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "start:proxy": "powershell -ExecutionPolicy Bypass -File scripts/run-node-with-system-proxy.ps1 src/server.js",
+    "daily": "node src/daily.js",
+    "daily:proxy": "powershell -ExecutionPolicy Bypass -File scripts/run-node-with-system-proxy.ps1 src/daily.js",
+    "dry-run": "node src/daily.js --dry-run",
+    "deploy:netlify": "npx netlify deploy --prod --dir=public --functions=netlify/functions",
+    "check": "node --check src/server.js && node --check src/daily.js && node --check src/recommender.js && node --check src/scorer.js && node --check src/normalize.js && node --check src/sources/appstore.js && node --check src/sources/googleplay.js && node --check netlify/functions/api.mjs && node --check public/app.js",
+    "test": "node --test",
+    "install-task": "powershell -ExecutionPolicy Bypass -File scripts/install-scheduled-task.ps1",
+    "uninstall-task": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-scheduled-task.ps1"
+  }
+}
