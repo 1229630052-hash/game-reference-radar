@@ -1,10 +1,12 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const projectRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
+function moduleDir() {
+  if (typeof __dirname !== "undefined") return __dirname;
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
+export const projectRoot = path.resolve(moduleDir(), "..");
 
 export const paths = {
   data: path.join(projectRoot, "data"),
