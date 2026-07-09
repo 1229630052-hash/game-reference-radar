@@ -131,7 +131,7 @@ function renderMetrics() {
 function renderDigest() {
   const summary = state.report?.summary;
   $("#digestTitle").textContent = summary?.headline || "今日重点正在生成";
-  $("#digestText").textContent = summary?.text || "暂无摘要。刷新推荐后会生成今日素材雷达小结。";
+  $("#digestText").textContent = summary?.text || "暂无摘要。刷新推荐后会生成今日策展小结。";
   $("#digestBullets").innerHTML = (summary?.bullets || [])
     .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join("");
@@ -208,7 +208,7 @@ function renderToday() {
   $("#sourceSummary").textContent = sourceSummary(items);
   $("#boardTitle").textContent =
     state.boardMode === "explore"
-      ? `探索池 ${items.length} 张`
+      ? `灵感探索池 ${items.length} 张`
       : `今日精选 ${state.report?.count || 0} 张`;
   $("#boardSubtitle").textContent =
     state.boardMode === "explore"
@@ -351,7 +351,7 @@ async function refreshToday() {
     });
     writeLocal(browserKeys.lastReport, state.report);
     renderToday();
-    setStatus(`已生成 ${state.report.count} 张精选，探索池 ${state.report.explorationPool?.length || 0} 张`);
+    setStatus(`已生成 ${state.report.count} 张精选，灵感探索池 ${state.report.explorationPool?.length || 0} 张`);
   } finally {
     $("#refreshBtn").disabled = false;
   }
@@ -453,7 +453,7 @@ function escapeHtml(value) {
 }
 
 async function init() {
-  setStatus("正在加载今日素材雷达");
+  setStatus("正在加载游戏灵感策展台");
   const [report, feedback, config, secrets] = await Promise.all([
     api("/api/today"),
     api("/api/feedback"),
@@ -466,7 +466,7 @@ async function init() {
   state.secrets = secrets;
   if (state.report) writeLocal(browserKeys.lastReport, state.report);
   renderToday();
-  setStatus(`已加载 ${state.report?.count || 0} 张精选，探索池 ${state.report?.explorationPool?.length || 0} 张`);
+  setStatus(`已加载 ${state.report?.count || 0} 张精选，灵感探索池 ${state.report?.explorationPool?.length || 0} 张`);
 
   $("#refreshBtn").addEventListener("click", refreshToday);
   $("#clearFiltersBtn").addEventListener("click", clearFilters);

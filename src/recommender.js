@@ -184,7 +184,7 @@ function buildSummary(stats, recommendations) {
     headline: `今日重点关注 ${focus}`,
     text: `今日从 ${stats.candidateCount} 个候选里精选 ${stats.selectedCount} 张，平均推荐强度 ${stats.averageStrength}。素材以 ${assets} 为主，来源分布：${sources}。建议优先拆解${strongest ? `《${strongest.title}》` : "前三张"}的玩法结构和包装表达。`,
     bullets: [
-      `探索池保留 ${stats.explorationCount} 张候选，适合继续按品类和素材用途筛选。`,
+      `灵感探索池保留 ${stats.explorationCount} 张候选，适合继续按品类和素材用途筛选。`,
       stats.errorCount > 0
         ? `有 ${stats.errorCount} 个来源请求失败，已用其他来源补足推荐。`
         : "本次抓取没有阻断性错误。",
