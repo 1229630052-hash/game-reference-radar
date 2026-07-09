@@ -453,7 +453,7 @@ function escapeHtml(value) {
 }
 
 async function init() {
-  setStatus("正在加载游戏灵感策展台");
+  setStatus("正在加载竞品灵感策展台");
   const [report, feedback, config, secrets] = await Promise.all([
     api("/api/today"),
     api("/api/feedback"),
