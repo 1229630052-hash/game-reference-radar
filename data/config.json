@@ -1,5 +1,6 @@
 {
   "dailyCount": 10,
+  "explorationCount": 60,
   "timezone": "Asia/Shanghai",
   "scheduleTime": "09:00",
   "port": 4188,

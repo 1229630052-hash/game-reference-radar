@@ -133,6 +133,65 @@ function findReplaceIndex(items, incomingAssetType) {
   return items.length - 1;
 }
 
+function countBy(items, key) {
+  const counts = {};
+  for (const item of items) {
+    const value = typeof key === "function" ? key(item) : item[key];
+    if (!value) continue;
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function topEntries(counts, limit = 3) {
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit);
+}
+
+function buildStats({ candidates, scored, recommendations, explorationPool, errors }) {
+  const averageStrength = recommendations.length
+    ? Math.round(
+        recommendations.reduce((sum, item) => sum + Number(item.scores?.strength ?? 0), 0) /
+          recommendations.length,
+      )
+    : 0;
+
+  return {
+    candidateCount: candidates.length,
+    scoredCount: scored.length,
+    selectedCount: recommendations.length,
+    explorationCount: explorationPool.length,
+    averageStrength,
+    sourceCounts: countBy(scored, "source"),
+    selectedSourceCounts: countBy(recommendations, "source"),
+    assetCounts: countBy(recommendations, "assetType"),
+    typeCounts: countBy(recommendations, "inspirationType"),
+    errorCount: errors.length,
+  };
+}
+
+function buildSummary(stats, recommendations) {
+  const topTypes = topEntries(stats.typeCounts, 2).map(([type]) => type);
+  const topAssets = topEntries(stats.assetCounts, 2).map(([asset]) => asset);
+  const topSources = topEntries(stats.selectedSourceCounts, 2).map(([source, count]) => `${source} ${count}`);
+  const strongest = [...recommendations].sort((a, b) => (b.scores?.strength ?? 0) - (a.scores?.strength ?? 0))[0];
+  const focus = topTypes.length ? topTypes.join("、") : "休闲游戏竞品";
+  const assets = topAssets.length ? topAssets.join("、") : "玩法截图";
+  const sources = topSources.length ? topSources.join("，") : "暂无来源分布";
+
+  return {
+    headline: `今日重点关注 ${focus}`,
+    text: `今日从 ${stats.candidateCount} 个候选里精选 ${stats.selectedCount} 张，平均推荐强度 ${stats.averageStrength}。素材以 ${assets} 为主，来源分布：${sources}。建议优先拆解${strongest ? `《${strongest.title}》` : "前三张"}的玩法结构和包装表达。`,
+    bullets: [
+      `探索池保留 ${stats.explorationCount} 张候选，适合继续按品类和素材用途筛选。`,
+      stats.errorCount > 0
+        ? `有 ${stats.errorCount} 个来源请求失败，已用其他来源补足推荐。`
+        : "本次抓取没有阻断性错误。",
+    ],
+  };
+}
+
 export async function generateRecommendations(options = {}) {
   const config = options.config ?? (await loadConfig());
   const feedback = options.feedback ?? (await loadFeedback());
@@ -151,17 +210,26 @@ export async function generateRecommendations(options = {}) {
       createdAt: new Date().toISOString(),
     }))
     .filter((candidate) => candidate.scores.total > -1)
-    .filter((candidate) => candidate.thumbnailUrl || candidate.source === "mock");
+    .filter((candidate) => candidate.thumbnailUrl || candidate.source === "mock")
+    .sort((a, b) => b.scores.total - a.scores.total);
 
   const selected = selectDiverseCandidates(scored, config);
   const enriched = options.useNetwork === false ? selected : await enrichWithOpenAI(selected, secrets);
   const recommendations = await cacheRecommendationThumbnails(enriched);
+  const selectedIds = new Set(recommendations.map((item) => item.id));
+  const explorationPool = scored
+    .filter((item) => !selectedIds.has(item.id))
+    .slice(0, Number(config.explorationCount ?? 60));
+  const stats = buildStats({ candidates, scored, recommendations, explorationPool, errors });
 
   return {
     date,
     generatedAt: new Date().toISOString(),
     count: recommendations.length,
     errors,
+    stats,
+    summary: buildSummary(stats, recommendations),
     recommendations,
+    explorationPool,
   };
 }

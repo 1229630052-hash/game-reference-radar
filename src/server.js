@@ -110,7 +110,10 @@ function mockThumbSvg(type, title) {
 async function loadTodayReport(config) {
   const date = todayInTimezone(config.timezone);
   const filePath = recommendationPath(date);
-  if (await fileExists(filePath)) return readJson(filePath, null);
+  if (await fileExists(filePath)) {
+    const report = await readJson(filePath, null);
+    if (report?.stats && Array.isArray(report.explorationPool)) return report;
+  }
   return runDaily({ notify: false });
 }
 

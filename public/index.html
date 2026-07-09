@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>每日游戏创意灵感日报</title>
-    <link rel="stylesheet" href="/styles.css?v=20260708-netlify" />
+    <title>游戏创意素材雷达</title>
+    <link rel="stylesheet" href="/styles.css?v=20260709-radar" />
   </head>
   <body>
     <div class="app-shell">
@@ -12,13 +12,13 @@
         <div class="brand">
           <div class="brand-mark">GR</div>
           <div>
-            <h1>创意灵感日报</h1>
+            <h1>素材雷达</h1>
             <p id="reportDate">正在读取</p>
           </div>
         </div>
 
         <nav class="nav-tabs" aria-label="视图">
-          <button class="nav-tab active" data-view="today" title="查看今日十张灵感卡片">今日</button>
+          <button class="nav-tab active" data-view="today" title="查看今日素材雷达">今日</button>
           <button class="nav-tab" data-view="favorites" title="查看收藏过的灵感">收藏</button>
           <button class="nav-tab" data-view="history" title="查看历史日报">历史</button>
           <button class="nav-tab" data-view="settings" title="调整推荐偏好">设置</button>
@@ -26,6 +26,15 @@
 
         <div class="control-panel">
           <button id="refreshBtn" class="primary-btn" title="重新生成今日灵感日报">刷新今日推荐</button>
+
+          <div class="field">
+            <span>素材模式</span>
+            <div class="segmented">
+              <button class="segment active" data-board-mode="selected" type="button">今日精选</button>
+              <button class="segment" data-board-mode="explore" type="button">探索池</button>
+            </div>
+          </div>
+
           <label class="field">
             <span>按游戏品类筛选</span>
             <select id="gameCategoryFilter">
@@ -40,12 +49,14 @@
               <option value="idle,tycoon,factory">放置/经营</option>
             </select>
           </label>
+
           <label class="field">
             <span>按灵感类型筛选</span>
             <select id="typeFilter">
               <option value="">全部灵感类型</option>
             </select>
           </label>
+
           <label class="field">
             <span>按素材类型筛选</span>
             <select id="assetFilter">
@@ -55,10 +66,12 @@
               <option value="活动图">活动图</option>
             </select>
           </label>
+
           <label class="field">
             <span>按标签搜索</span>
             <input id="tagSearch" type="search" placeholder="例如 puzzle / merge / royal" />
           </label>
+
           <div class="status" id="statusText">准备就绪</div>
         </div>
       </aside>
@@ -67,11 +80,58 @@
         <section id="todayView" class="view active">
           <div class="section-head">
             <div>
-              <h2>今日 10 张创意灵感</h2>
-              <p>每张图都带一个可转化成游戏想法的笔记。</p>
+              <h2 id="boardTitle">今日精选 10 张</h2>
+              <p id="boardSubtitle">把竞品素材拆成可执行的玩法、美术和包装想法。</p>
             </div>
             <span id="sourceSummary" class="summary-pill"></span>
           </div>
+
+          <div class="metric-grid" aria-label="今日指标">
+            <div class="metric-card">
+              <span>今日候选</span>
+              <strong id="metricCandidates">0</strong>
+            </div>
+            <div class="metric-card">
+              <span>今日精选</span>
+              <strong id="metricSelected">0</strong>
+            </div>
+            <div class="metric-card">
+              <span>探索池</span>
+              <strong id="metricExplore">0</strong>
+            </div>
+            <div class="metric-card">
+              <span>平均强度</span>
+              <strong id="metricStrength">0</strong>
+            </div>
+            <div class="metric-card">
+              <span>App Store</span>
+              <strong id="metricAppStore">0</strong>
+            </div>
+            <div class="metric-card">
+              <span>Google Play</span>
+              <strong id="metricGooglePlay">0</strong>
+            </div>
+          </div>
+
+          <section class="digest-panel" aria-labelledby="digestTitle">
+            <div>
+              <p class="eyebrow">今日小结</p>
+              <h3 id="digestTitle">正在生成素材雷达摘要</h3>
+              <p id="digestText">加载后会总结今日重点品类、素材用途和来源分布。</p>
+            </div>
+            <ul id="digestBullets"></ul>
+          </section>
+
+          <div class="board-toolbar">
+            <div>
+              <strong id="visibleCount">0 张素材</strong>
+              <span id="filterHint">当前显示全部</span>
+            </div>
+            <div class="toolbar-actions">
+              <button id="clearFiltersBtn" type="button">清空筛选</button>
+            </div>
+          </div>
+
           <div id="cardsGrid" class="cards-grid"></div>
         </section>
 
@@ -105,8 +165,12 @@
           </div>
           <form id="settingsForm" class="settings-form">
             <label class="field">
-              <span>每日推荐数量</span>
+              <span>每日精选数量</span>
               <input id="dailyCount" type="number" min="1" max="30" />
+            </label>
+            <label class="field">
+              <span>探索池数量</span>
+              <input id="explorationCount" type="number" min="10" max="150" />
             </label>
             <label class="field">
               <span>提醒时间</span>
@@ -197,6 +261,11 @@
           </div>
           <h3></h3>
           <p class="reason"></p>
+          <div class="score-bars">
+            <div><span>竞品相关</span><meter class="competitor-meter" min="0" max="100"></meter></div>
+            <div><span>创意启发</span><meter class="creative-meter" min="0" max="100"></meter></div>
+            <div><span>视觉参考</span><meter class="visual-meter" min="0" max="100"></meter></div>
+          </div>
           <div class="idea-box">
             <strong>游戏化想法</strong>
             <p></p>
@@ -213,6 +282,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260708-netlify" type="module"></script>
+    <script src="/app.js?v=20260709-radar" type="module"></script>
   </body>
 </html>

@@ -44,6 +44,7 @@ export const defaultTypeQuotas = {
 
 export const defaultConfig = {
   dailyCount: 10,
+  explorationCount: 60,
   timezone: "Asia/Shanghai",
   scheduleTime: "09:00",
   port: 4188,
@@ -100,6 +101,7 @@ export async function saveConfig(nextConfig) {
     ...defaultConfig,
     ...nextConfig,
     dailyCount: Number(nextConfig.dailyCount) || defaultConfig.dailyCount,
+    explorationCount: Number(nextConfig.explorationCount) || defaultConfig.explorationCount,
     port: Number(nextConfig.port) || defaultConfig.port,
   });
 }

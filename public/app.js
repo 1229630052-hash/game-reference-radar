@@ -4,6 +4,7 @@ const state = {
   config: null,
   secrets: null,
   view: "today",
+  boardMode: "selected",
   gameCategoryFilter: "",
   typeFilter: "",
   assetFilter: "",
@@ -48,6 +49,11 @@ function setStatus(text) {
   $("#statusText").textContent = text;
 }
 
+function currentItems() {
+  if (state.boardMode === "explore") return state.report?.explorationPool || [];
+  return state.report?.recommendations || [];
+}
+
 function imageUrl(item) {
   return item.cachedThumbPath || item.thumbnailUrl || `/api/mock-thumb/${encodeURIComponent(item.inspirationType)}/${encodeURIComponent(item.title)}.svg`;
 }
@@ -90,15 +96,50 @@ function renderTypeOptions(items) {
     `<option value="">全部灵感类型</option>`,
     ...types.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`),
   ].join("");
-  $("#typeFilter").value = current;
+  $("#typeFilter").value = types.includes(current) ? current : "";
+  state.typeFilter = $("#typeFilter").value;
+}
+
+function countBy(items, key) {
+  const counts = {};
+  for (const item of items || []) {
+    const value = typeof key === "function" ? key(item) : item[key];
+    if (!value) continue;
+    counts[value] = (counts[value] || 0) + 1;
+  }
+  return counts;
 }
 
 function sourceSummary(items) {
-  const counts = {};
-  for (const item of items || []) counts[item.source] = (counts[item.source] || 0) + 1;
+  const counts = countBy(items, "source");
   return Object.entries(counts)
     .map(([source, count]) => `${source} ${count}`)
     .join(" · ");
+}
+
+function renderMetrics() {
+  const stats = state.report?.stats || {};
+  const selectedSources = stats.selectedSourceCounts || {};
+  $("#metricCandidates").textContent = stats.candidateCount ?? 0;
+  $("#metricSelected").textContent = stats.selectedCount ?? state.report?.count ?? 0;
+  $("#metricExplore").textContent = stats.explorationCount ?? state.report?.explorationPool?.length ?? 0;
+  $("#metricStrength").textContent = stats.averageStrength ?? 0;
+  $("#metricAppStore").textContent = selectedSources.appstore || 0;
+  $("#metricGooglePlay").textContent = selectedSources.googleplay || 0;
+}
+
+function renderDigest() {
+  const summary = state.report?.summary;
+  $("#digestTitle").textContent = summary?.headline || "今日重点正在生成";
+  $("#digestText").textContent = summary?.text || "暂无摘要。刷新推荐后会生成今日素材雷达小结。";
+  $("#digestBullets").innerHTML = (summary?.bullets || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+}
+
+function strengthFor(item) {
+  if (Number.isFinite(item.scores?.strength)) return item.scores.strength;
+  return Math.round(Math.min(100, Math.max(0, Number(item.scores?.total ?? 0) * 60)));
 }
 
 function renderCards(container, items) {
@@ -113,17 +154,21 @@ function renderCards(container, items) {
     const node = template.content.firstElementChild.cloneNode(true);
     const link = node.querySelector(".image-link");
     const img = node.querySelector(".card-image");
+    const strength = strengthFor(item);
     link.href = item.sourceUrl || imageUrl(item);
     img.src = imageUrl(item);
     img.alt = item.title;
     node.querySelector(".type-pill").textContent = item.inspirationType;
     node.querySelector(".asset-pill").textContent = assetTypeFor(item);
-    node.querySelector(".score-pill").textContent = `分数 ${Math.max(0, item.scores?.total ?? 0).toFixed(2)}`;
+    node.querySelector(".score-pill").textContent = `推荐强度 ${strength}`;
     node.querySelector("h3").textContent = item.title;
     node.querySelector(".reason").textContent = item.reason || "这张图有可提炼的视觉或玩法参考。";
     node.querySelector(".idea-box p").textContent = item.gameIdea || "试着把图中的空间、物件或反馈拆成一个核心互动规则。";
+    node.querySelector(".competitor-meter").value = item.scores?.competitor ?? 0;
+    node.querySelector(".creative-meter").value = item.scores?.creative ?? 0;
+    node.querySelector(".visual-meter").value = item.scores?.visual ?? 0;
     node.querySelector(".tags").innerHTML = (item.tags || [])
-      .slice(0, 6)
+      .slice(0, 7)
       .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
       .join("");
     node.querySelector(".meta").innerHTML = [
@@ -144,12 +189,37 @@ function renderCards(container, items) {
   }
 }
 
+function filterHint() {
+  const parts = [];
+  const categoryLabel = $("#gameCategoryFilter").selectedOptions[0]?.textContent;
+  const typeLabel = $("#typeFilter").selectedOptions[0]?.textContent;
+  const assetLabel = $("#assetFilter").selectedOptions[0]?.textContent;
+  if (state.gameCategoryFilter && categoryLabel) parts.push(categoryLabel);
+  if (state.typeFilter && typeLabel) parts.push(typeLabel);
+  if (state.assetFilter && assetLabel) parts.push(assetLabel);
+  if (state.tagSearch.trim()) parts.push(`关键词：${state.tagSearch.trim()}`);
+  return parts.length ? parts.join(" / ") : "当前显示全部";
+}
+
 function renderToday() {
-  const items = state.report?.recommendations || [];
+  const items = currentItems();
+  const visible = filteredItems(items);
   $("#reportDate").textContent = state.report?.date || "暂无日报";
   $("#sourceSummary").textContent = sourceSummary(items);
+  $("#boardTitle").textContent =
+    state.boardMode === "explore"
+      ? `探索池 ${items.length} 张`
+      : `今日精选 ${state.report?.count || 0} 张`;
+  $("#boardSubtitle").textContent =
+    state.boardMode === "explore"
+      ? "候选素材池适合按品类、用途和关键词继续深挖。"
+      : "把竞品素材拆成可执行的玩法、美术和包装想法。";
+  renderMetrics();
+  renderDigest();
   renderTypeOptions(items);
-  renderCards($("#cardsGrid"), filteredItems(items));
+  $("#visibleCount").textContent = `${visible.length} 张素材`;
+  $("#filterHint").textContent = filterHint();
+  renderCards($("#cardsGrid"), visible);
 }
 
 async function renderFavorites() {
@@ -158,7 +228,10 @@ async function renderFavorites() {
       .filter(([, value]) => value.action === "favorite")
       .map(([id]) => id),
   );
-  const localItems = (state.report?.recommendations || []).filter((item) => favoriteIds.has(item.id));
+  const localItems = [
+    ...(state.report?.recommendations || []),
+    ...(state.report?.explorationPool || []),
+  ].filter((item) => favoriteIds.has(item.id));
   renderCards($("#favoritesGrid"), localItems);
   setStatus("收藏夹已更新");
 }
@@ -173,7 +246,7 @@ async function renderHistory() {
     return;
   }
   const button = document.createElement("button");
-  button.textContent = `${lastReport.date} · ${lastReport.count} 张`;
+  button.textContent = `${lastReport.date} · ${lastReport.count} 张精选`;
   button.addEventListener("click", () => renderCards($("#historyGrid"), lastReport.recommendations || []));
   historyList.append(button);
   renderCards($("#historyGrid"), lastReport.recommendations || []);
@@ -182,6 +255,7 @@ async function renderHistory() {
 
 function renderSettings() {
   $("#dailyCount").value = state.config.dailyCount;
+  $("#explorationCount").value = state.config.explorationCount || 60;
   $("#scheduleTime").value = state.config.scheduleTime;
   $("#preferredTags").value = (state.config.preferredTags || []).join("\n");
   $("#blockedTags").value = (state.config.blockedTags || []).join("\n");
@@ -222,6 +296,7 @@ async function switchView(view) {
   $$(".nav-tab").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   $$(".view").forEach((panel) => panel.classList.remove("active"));
   $(`#${view}View`).classList.add("active");
+  if (view === "today") renderToday();
   if (view === "favorites") await renderFavorites();
   if (view === "history") await renderHistory();
   if (view === "settings") renderSettings();
@@ -246,6 +321,11 @@ function applyFeedbackLocally(feedback, { id, action, item, tag }) {
   const now = new Date().toISOString();
   if (id) next.items[id] = { ...(next.items[id] || {}), action, updatedAt: now };
   if (action === "block_tag" && tag && !next.blockedTags.includes(tag)) next.blockedTags.push(tag);
+  if (action === "favorite") {
+    for (const targetTag of item.tags || []) {
+      next.tagWeights[targetTag] = Number(next.tagWeights[targetTag] || 0) + 2;
+    }
+  }
   return { ...next, updatedAt: now };
 }
 
@@ -271,7 +351,7 @@ async function refreshToday() {
     });
     writeLocal(browserKeys.lastReport, state.report);
     renderToday();
-    setStatus(`已生成 ${state.report.count} 张灵感卡片`);
+    setStatus(`已生成 ${state.report.count} 张精选，探索池 ${state.report.explorationPool?.length || 0} 张`);
   } finally {
     $("#refreshBtn").disabled = false;
   }
@@ -282,6 +362,7 @@ async function saveSettings(event) {
   const next = {
     ...state.config,
     dailyCount: Number($("#dailyCount").value),
+    explorationCount: Number($("#explorationCount").value),
     scheduleTime: $("#scheduleTime").value,
     preferredTags: lines($("#preferredTags").value),
     blockedTags: lines($("#blockedTags").value),
@@ -338,6 +419,24 @@ function saveBrowserSecrets(update) {
   writeLocal(browserKeys.secrets, next);
 }
 
+function setBoardMode(mode) {
+  state.boardMode = mode;
+  $$(".segment").forEach((button) => button.classList.toggle("active", button.dataset.boardMode === mode));
+  renderToday();
+}
+
+function clearFilters() {
+  state.gameCategoryFilter = "";
+  state.typeFilter = "";
+  state.assetFilter = "";
+  state.tagSearch = "";
+  $("#gameCategoryFilter").value = "";
+  $("#typeFilter").value = "";
+  $("#assetFilter").value = "";
+  $("#tagSearch").value = "";
+  renderToday();
+}
+
 function lines(text) {
   return text
     .split(/\r?\n/)
@@ -354,21 +453,26 @@ function escapeHtml(value) {
 }
 
 async function init() {
-  setStatus("正在加载今日灵感日报");
+  setStatus("正在加载今日素材雷达");
   const [report, feedback, config, secrets] = await Promise.all([
     api("/api/today"),
     api("/api/feedback"),
     api("/api/config"),
     api("/api/secrets"),
   ]);
-  state.report = readLocal(browserKeys.lastReport, report) || report;
+  state.report = report || readLocal(browserKeys.lastReport, null);
   state.feedback = readLocal(browserKeys.feedback, feedback) || feedback;
   state.config = { ...config, ...(readLocal(browserKeys.config, null) || {}) };
   state.secrets = secrets;
+  if (state.report) writeLocal(browserKeys.lastReport, state.report);
   renderToday();
-  setStatus(`已加载 ${state.report.count || 0} 张今日灵感`);
+  setStatus(`已加载 ${state.report?.count || 0} 张精选，探索池 ${state.report?.explorationPool?.length || 0} 张`);
 
   $("#refreshBtn").addEventListener("click", refreshToday);
+  $("#clearFiltersBtn").addEventListener("click", clearFilters);
+  $$(".segment").forEach((button) =>
+    button.addEventListener("click", () => setBoardMode(button.dataset.boardMode)),
+  );
   $("#gameCategoryFilter").addEventListener("change", (event) => {
     state.gameCategoryFilter = event.target.value;
     renderToday();

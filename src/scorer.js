@@ -1,17 +1,19 @@
 import { clamp, extractDomain, normalizeTag } from "./utils.js";
 
 const typeKeywords = {
-  玩法机制: ["puzzle", "mechanic", "toy", "machine", "maze", "run", "board"],
-  关卡结构: ["room", "layout", "isometric", "interior", "diorama", "maze"],
-  场景氛围: ["cozy", "fantasy", "garden", "workshop", "environment", "whimsical"],
-  道具交互: ["tool", "object", "props", "box", "kitchen", "storage"],
-  视觉风格: ["clay", "paper", "craft", "felt", "toy", "3d"],
-  UI反馈: ["reward", "badge", "icon", "progress", "feedback", "ui"],
-  反常组合: ["surreal", "unexpected", "dream", "fantasy", "machine"],
+  玩法机制: ["puzzle", "mechanic", "toy", "machine", "maze", "run", "board", "screw", "pin"],
+  关卡结构: ["room", "layout", "isometric", "interior", "diorama", "maze", "level"],
+  场景氛围: ["cozy", "fantasy", "garden", "workshop", "environment", "home", "decor"],
+  道具交互: ["tool", "object", "props", "box", "kitchen", "storage", "sort"],
+  视觉风格: ["clay", "paper", "craft", "felt", "toy", "3d", "cartoon"],
+  UI反馈: ["reward", "badge", "icon", "progress", "feedback", "ui", "daily"],
+  反常组合: ["surreal", "unexpected", "dream", "fantasy", "machine", "cleaning", "organizing"],
 };
 
-export function scoreCandidate(candidate, config, feedback) {
-  const text = [
+const competitorSources = new Set(["appstore", "googleplay"]);
+
+function textFor(candidate) {
+  return [
     candidate.title,
     candidate.description,
     candidate.query,
@@ -19,7 +21,10 @@ export function scoreCandidate(candidate, config, feedback) {
   ]
     .join(" ")
     .toLowerCase();
+}
 
+export function scoreCandidate(candidate, config, feedback) {
+  const text = textFor(candidate);
   const sourceWeight = Number(config.sourceWeights?.[candidate.source] ?? 1);
   let relevance = 0.35;
 
@@ -63,12 +68,27 @@ export function scoreCandidate(candidate, config, feedback) {
       feedbackScore +
       assetAdjustment;
 
+  const competitor = clamp(
+    (competitorSources.has(candidate.source) ? 0.72 : 0.42) +
+      (text.includes("competitor") ? 0.16 : 0) +
+      (candidate.sourceUrl ? 0.08 : 0),
+    0,
+    1,
+  );
+  const creative = clamp(relevance + Math.max(0, feedbackScore) * 0.16, 0, 1);
+  const visual = visualQuality;
+  const strength = clamp(competitor * 0.34 + creative * 0.36 + visual * 0.22 + Math.max(0, assetAdjustment), 0, 1);
+
   return {
     relevance: Number(clamp(relevance, 0, 1).toFixed(3)),
     visualQuality: Number(visualQuality.toFixed(3)),
     feedback: Number(feedbackScore.toFixed(3)),
     asset: Number(assetAdjustment.toFixed(3)),
     total: Number(raw.toFixed(3)),
+    strength: Math.round(strength * 100),
+    competitor: Math.round(competitor * 100),
+    creative: Math.round(creative * 100),
+    visual: Math.round(visual * 100),
   };
 }
 
@@ -86,13 +106,13 @@ export function addTemplateInsight(candidate) {
     反常组合: `${title} 把不常放在一起的元素组合起来，适合生成更有辨识度的关卡主题。`,
   };
   const ideaByType = {
-    玩法机制: "把图中的结构拆成 3 个可互动部件：入口、变化器和出口，让玩家通过调整顺序完成目标。",
+    玩法机制: "把图中的结构拆成入口、变化器和出口，让玩家通过调整顺序完成目标。",
     关卡结构: "以图的空间层级为模板，设计一个从外到内逐步解锁的小关卡，每个区域只引入一个新规则。",
-    场景氛围: "把这张图延展成一套 10 关主题包，每关复用同一视觉母题，但改变目标道具和反馈动画。",
-    道具交互: "选择 5 个最有辨识度的小物件，分别做成拖拽、旋转、合成、开关和收集交互。",
+    场景氛围: "把这张图延展成一套主题关卡包，每关复用同一视觉母题，但改变目标道具和反馈动画。",
+    道具交互: "选择最有辨识度的小物件，分别做成拖拽、旋转、合成、开关和收集交互。",
     视觉风格: "用这张图的材质和配色做一版小型美术规范：背景、主物件、按钮、奖励特效各取一个规则。",
-    UI反馈: "把画面中的节奏拆成开始、进行中、完成三段反馈，用在关卡胜利或奖励结算界面。",
-    反常组合: "保留两个最冲突的元素做主题，例如“家电 + 花园”，再围绕它设计一个核心互动动词。",
+    UI反馈: "把画面节奏拆成开始、进行中、完成三段反馈，用在关卡胜利或奖励结算界面。",
+    反常组合: "保留两个最冲突的元素做主题，再围绕它设计一个核心互动动词。",
   };
 
   return {

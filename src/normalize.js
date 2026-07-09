@@ -3,9 +3,7 @@ import { stableId, uniqueTags } from "./utils.js";
 const ASSET_TYPES = ["ICON", "宣传图", "活动图"];
 
 export function inferAssetType(candidate) {
-  if (ASSET_TYPES.includes(candidate.assetType)) {
-    return candidate.assetType;
-  }
+  if (ASSET_TYPES.includes(candidate.assetType)) return candidate.assetType;
 
   const text = [
     candidate.assetType,
