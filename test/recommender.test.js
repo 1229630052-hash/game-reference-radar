@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { applyFeedbackEvent, defaultFeedback } from "../src/feedback.js";
 import { dedupeCandidates } from "../src/normalize.js";
-import { generateRecommendations } from "../src/recommender.js";
+import { generateRecommendations, selectDiverseCandidates } from "../src/recommender.js";
 import { scoreCandidate } from "../src/scorer.js";
 
 const baseConfig = {
@@ -94,3 +94,57 @@ test("generateRecommendations works without network or API keys", async () => {
   assert.equal(report.recommendations.length, 10);
   assert.ok(report.recommendations.every((item) => item.reason && item.gameIdea));
 });
+
+test("selectDiverseCandidates keeps key store sources visible", () => {
+  const candidates = [
+    ...Array.from({ length: 14 }, (_, index) =>
+      testCandidate(`app-${index}`, "appstore", 1.5 - index * 0.01),
+    ),
+    ...Array.from({ length: 3 }, (_, index) =>
+      testCandidate(`gp-${index}`, "googleplay", 0.9 - index * 0.01),
+    ),
+  ];
+
+  const selected = selectDiverseCandidates(
+    candidates,
+    { ...baseConfig, dailyCount: 10, typeQuotas: {} },
+    "2026-07-24",
+  );
+
+  assert.equal(selected.length, 10);
+  assert.ok(selected.some((item) => item.source === "appstore"));
+  assert.ok(selected.some((item) => item.source === "googleplay"));
+});
+
+test("selectDiverseCandidates rotates high-score candidates by date", () => {
+  const candidates = Array.from({ length: 18 }, (_, index) =>
+    testCandidate(`mock-${index}`, "mock", 1.1),
+  );
+  const config = { ...baseConfig, dailyCount: 6, typeQuotas: {} };
+  const firstDay = selectDiverseCandidates(candidates, config, "2026-07-24").map((item) => item.id);
+  const nextDay = selectDiverseCandidates(candidates, config, "2026-07-25").map((item) => item.id);
+
+  assert.notDeepEqual(nextDay, firstDay);
+});
+
+function testCandidate(id, source, total) {
+  return {
+    id,
+    source,
+    sourceId: id,
+    sourceUrl: `https://example.com/${id}`,
+    title: id,
+    description: id,
+    inspirationType: "玩法机制",
+    assetType: "宣传图",
+    tags: ["puzzle"],
+    thumbnailUrl: `/thumbs/${id}.jpg`,
+    scores: {
+      total,
+      strength: 90,
+      competitor: source === "mock" ? 40 : 90,
+      creative: 80,
+      visual: 80,
+    },
+  };
+}

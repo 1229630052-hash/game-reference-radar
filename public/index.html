@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>竞品灵感策展台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260709-radar" />
+    <link rel="stylesheet" href="/styles.css?v=20260724-gallery" />
   </head>
   <body>
     <div class="app-shell">
@@ -104,11 +104,11 @@
               <strong id="metricStrength">0</strong>
             </div>
             <div class="metric-card">
-              <span>App Store</span>
+              <span>候选 App Store</span>
               <strong id="metricAppStore">0</strong>
             </div>
             <div class="metric-card">
-              <span>Google Play</span>
+              <span>候选 Google Play</span>
               <strong id="metricGooglePlay">0</strong>
             </div>
           </div>
@@ -250,9 +250,9 @@
 
     <template id="cardTemplate">
       <article class="inspiration-card">
-        <a class="image-link" target="_blank" rel="noreferrer">
+        <button class="card-open" type="button" title="查看参考详情">
           <img class="card-image" alt="" loading="lazy" />
-        </a>
+        </button>
         <div class="card-body">
           <div class="card-topline">
             <span class="type-pill"></span>
@@ -260,28 +260,48 @@
             <span class="score-pill"></span>
           </div>
           <h3></h3>
-          <p class="reason"></p>
-          <div class="score-bars">
-            <div><span>竞品相关</span><meter class="competitor-meter" min="0" max="100"></meter></div>
-            <div><span>创意启发</span><meter class="creative-meter" min="0" max="100"></meter></div>
-            <div><span>视觉参考</span><meter class="visual-meter" min="0" max="100"></meter></div>
-          </div>
-          <div class="idea-box">
-            <strong>游戏化想法</strong>
-            <p></p>
-          </div>
-          <div class="tags"></div>
           <div class="meta"></div>
-          <div class="actions">
-            <button data-action="favorite" title="收藏这个方向">收藏</button>
-            <button data-action="skip" title="减少类似推荐">跳过</button>
-            <button data-action="more_like" title="之后多推荐类似方向">更多类似</button>
-            <button data-action="block_tag" title="屏蔽这张图的第一个标签">屏蔽标签</button>
-          </div>
         </div>
       </article>
     </template>
 
-    <script src="/app.js?v=20260709-radar" type="module"></script>
+    <div id="detailModal" class="detail-modal" hidden>
+      <div class="detail-backdrop" data-close-detail></div>
+      <section class="detail-sheet" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+        <button class="detail-close" type="button" title="关闭" data-close-detail>×</button>
+        <div class="detail-media">
+          <img id="detailImage" alt="" />
+        </div>
+        <div class="detail-content">
+          <div class="detail-title-row">
+            <div>
+              <div id="detailPills" class="card-topline"></div>
+              <h2 id="detailTitle"></h2>
+            </div>
+            <a id="detailSourceLink" class="source-link" target="_blank" rel="noreferrer">打开来源</a>
+          </div>
+          <p id="detailReason" class="reason"></p>
+          <div class="score-bars">
+            <div><span>竞品相关</span><meter id="detailCompetitor" min="0" max="100"></meter></div>
+            <div><span>创意启发</span><meter id="detailCreative" min="0" max="100"></meter></div>
+            <div><span>视觉参考</span><meter id="detailVisual" min="0" max="100"></meter></div>
+          </div>
+          <div class="idea-box">
+            <strong>游戏化想法</strong>
+            <p id="detailIdea"></p>
+          </div>
+          <div id="detailTags" class="tags"></div>
+          <div id="detailMeta" class="meta"></div>
+          <div class="actions detail-actions">
+            <button data-detail-action="favorite" title="收藏这个方向">收藏</button>
+            <button data-detail-action="skip" title="减少类似推荐">跳过</button>
+            <button data-detail-action="more_like" title="之后多推荐类似方向">更多类似</button>
+            <button data-detail-action="block_tag" title="屏蔽这张图的第一个标签">屏蔽标签</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app.js?v=20260724-gallery" type="module"></script>
   </body>
 </html>

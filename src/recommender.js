@@ -67,10 +67,39 @@ export async function collectCandidates(config, { useNetwork = true, secrets = {
   };
 }
 
-export function selectDiverseCandidates(candidates, config) {
+const requiredVisibleSources = ["appstore", "googleplay"];
+const requiredAssetTypes = ["ICON", "宣传图", "活动图"];
+
+function hashText(value) {
+  let hash = 2166136261;
+  for (const char of String(value)) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function dailySortKey(item, date, salt = "") {
+  return hashText([date, salt, item.source, item.sourceId, item.sourceUrl, item.id].join("|"));
+}
+
+function rankWithDailyRotation(items, date, { windowSize = 12, salt = "" } = {}) {
+  const scoreSorted = [...items].sort((a, b) => b.scores.total - a.scores.total);
+  const output = [];
+
+  for (let index = 0; index < scoreSorted.length; index += windowSize) {
+    const window = scoreSorted.slice(index, index + windowSize);
+    window.sort((a, b) => dailySortKey(a, date, salt) - dailySortKey(b, date, salt));
+    output.push(...window);
+  }
+
+  return output;
+}
+
+export function selectDiverseCandidates(candidates, config, date = todayInTimezone(config.timezone)) {
   const selected = [];
   const quotas = { ...(config.typeQuotas ?? {}) };
-  const sorted = [...candidates].sort((a, b) => b.scores.total - a.scores.total);
+  const sorted = rankWithDailyRotation(candidates, date, { windowSize: 12, salt: "selected" });
 
   for (const [type, quota] of Object.entries(quotas)) {
     const picks = sorted
@@ -84,14 +113,14 @@ export function selectDiverseCandidates(candidates, config) {
     if (!selected.some((s) => s.id === item.id)) selected.push(item);
   }
 
-  return ensureAssetCoverage(selected.slice(0, config.dailyCount), sorted, config.dailyCount);
+  const withAssets = ensureAssetCoverage(selected.slice(0, config.dailyCount), sorted, config.dailyCount);
+  return ensureSourceCoverage(withAssets, sorted, config.dailyCount);
 }
 
 function ensureAssetCoverage(selected, sorted, dailyCount) {
-  const requiredAssets = ["ICON", "宣传图", "活动图"];
   const output = [...selected];
 
-  for (const assetType of requiredAssets) {
+  for (const assetType of requiredAssetTypes) {
     if (output.some((item) => item.assetType === assetType)) continue;
     const candidate = sorted.find(
       (item) =>
@@ -112,6 +141,30 @@ function ensureAssetCoverage(selected, sorted, dailyCount) {
   return output.slice(0, dailyCount);
 }
 
+function ensureSourceCoverage(selected, sorted, dailyCount) {
+  const output = [...selected];
+
+  for (const source of requiredVisibleSources) {
+    if (!sorted.some((item) => item.source === source)) continue;
+    if (output.some((item) => item.source === source)) continue;
+
+    const candidate = sorted.find(
+      (item) => item.source === source && !output.some((selectedItem) => selectedItem.id === item.id),
+    );
+    if (!candidate) continue;
+
+    if (output.length < dailyCount) {
+      output.push(candidate);
+      continue;
+    }
+
+    const replaceIndex = findSourceReplaceIndex(output, source);
+    if (replaceIndex >= 0) output[replaceIndex] = candidate;
+  }
+
+  return output.slice(0, dailyCount);
+}
+
 function findReplaceIndex(items, incomingAssetType) {
   const counts = new Map();
   for (const item of items) {
@@ -123,6 +176,40 @@ function findReplaceIndex(items, incomingAssetType) {
   items.forEach((item, index) => {
     if (item.assetType === incomingAssetType) return;
     if ((counts.get(item.assetType) ?? 0) <= 1) return;
+    if (item.scores.total < replaceScore) {
+      replaceScore = item.scores.total;
+      replaceIndex = index;
+    }
+  });
+
+  if (replaceIndex >= 0) return replaceIndex;
+  return items.length - 1;
+}
+
+function findSourceReplaceIndex(items, incomingSource) {
+  const sourceCounts = new Map();
+  const assetCounts = new Map();
+  for (const item of items) {
+    sourceCounts.set(item.source, (sourceCounts.get(item.source) ?? 0) + 1);
+    assetCounts.set(item.assetType, (assetCounts.get(item.assetType) ?? 0) + 1);
+  }
+
+  let replaceIndex = -1;
+  let replaceScore = Infinity;
+  items.forEach((item, index) => {
+    if (item.source === incomingSource) return;
+    if ((sourceCounts.get(item.source) ?? 0) <= 1) return;
+    if (requiredAssetTypes.includes(item.assetType) && (assetCounts.get(item.assetType) ?? 0) <= 1) return;
+    if (item.scores.total < replaceScore) {
+      replaceScore = item.scores.total;
+      replaceIndex = index;
+    }
+  });
+
+  if (replaceIndex >= 0) return replaceIndex;
+
+  items.forEach((item, index) => {
+    if (item.source === incomingSource) return;
     if (item.scores.total < replaceScore) {
       replaceScore = item.scores.total;
       replaceIndex = index;
@@ -165,6 +252,7 @@ function buildStats({ candidates, scored, recommendations, explorationPool, erro
     averageStrength,
     sourceCounts: countBy(scored, "source"),
     selectedSourceCounts: countBy(recommendations, "source"),
+    visibleSourceCounts: countBy([...recommendations, ...explorationPool], "source"),
     assetCounts: countBy(recommendations, "assetType"),
     typeCounts: countBy(recommendations, "inspirationType"),
     errorCount: errors.length,
@@ -213,13 +301,21 @@ export async function generateRecommendations(options = {}) {
     .filter((candidate) => candidate.thumbnailUrl || candidate.source === "mock")
     .sort((a, b) => b.scores.total - a.scores.total);
 
-  const selected = selectDiverseCandidates(scored, config);
+  const selected = selectDiverseCandidates(scored, config, date);
   const enriched = options.useNetwork === false ? selected : await enrichWithOpenAI(selected, secrets);
   const recommendations = await cacheRecommendationThumbnails(enriched);
   const selectedIds = new Set(recommendations.map((item) => item.id));
-  const explorationPool = scored
-    .filter((item) => !selectedIds.has(item.id))
-    .slice(0, Number(config.explorationCount ?? 60));
+  const explorationLimit = Number(config.explorationCount ?? 60);
+  const explorationCandidates = rankWithDailyRotation(
+    scored.filter((item) => !selectedIds.has(item.id)),
+    date,
+    { windowSize: 20, salt: "explore" },
+  );
+  const explorationPool = ensureSourceCoverage(
+    explorationCandidates.slice(0, explorationLimit),
+    explorationCandidates,
+    explorationLimit,
+  );
   const stats = buildStats({ candidates, scored, recommendations, explorationPool, errors });
 
   return {

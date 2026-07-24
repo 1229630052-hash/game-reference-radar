@@ -5,6 +5,7 @@ const state = {
   secrets: null,
   view: "today",
   boardMode: "selected",
+  detailItem: null,
   gameCategoryFilter: "",
   typeFilter: "",
   assetFilter: "",
@@ -119,13 +120,13 @@ function sourceSummary(items) {
 
 function renderMetrics() {
   const stats = state.report?.stats || {};
-  const selectedSources = stats.selectedSourceCounts || {};
+  const candidateSources = stats.sourceCounts || {};
   $("#metricCandidates").textContent = stats.candidateCount ?? 0;
   $("#metricSelected").textContent = stats.selectedCount ?? state.report?.count ?? 0;
   $("#metricExplore").textContent = stats.explorationCount ?? state.report?.explorationPool?.length ?? 0;
   $("#metricStrength").textContent = stats.averageStrength ?? 0;
-  $("#metricAppStore").textContent = selectedSources.appstore || 0;
-  $("#metricGooglePlay").textContent = selectedSources.googleplay || 0;
+  $("#metricAppStore").textContent = candidateSources.appstore || 0;
+  $("#metricGooglePlay").textContent = candidateSources.googleplay || 0;
 }
 
 function renderDigest() {
@@ -152,41 +153,82 @@ function renderCards(container, items) {
 
   for (const item of items) {
     const node = template.content.firstElementChild.cloneNode(true);
-    const link = node.querySelector(".image-link");
+    const openButton = node.querySelector(".card-open");
     const img = node.querySelector(".card-image");
     const strength = strengthFor(item);
-    link.href = item.sourceUrl || imageUrl(item);
+    node.dataset.source = item.source || "";
+    node.dataset.feedback = itemFeedbackAction(item) || "";
+    openButton.addEventListener("click", () => openDetail(item));
     img.src = imageUrl(item);
     img.alt = item.title;
     node.querySelector(".type-pill").textContent = item.inspirationType;
     node.querySelector(".asset-pill").textContent = assetTypeFor(item);
-    node.querySelector(".score-pill").textContent = `推荐强度 ${strength}`;
+    node.querySelector(".score-pill").textContent = strength;
     node.querySelector("h3").textContent = item.title;
-    node.querySelector(".reason").textContent = item.reason || "这张图有可提炼的视觉或玩法参考。";
-    node.querySelector(".idea-box p").textContent = item.gameIdea || "试着把图中的空间、物件或反馈拆成一个核心互动规则。";
-    node.querySelector(".competitor-meter").value = item.scores?.competitor ?? 0;
-    node.querySelector(".creative-meter").value = item.scores?.creative ?? 0;
-    node.querySelector(".visual-meter").value = item.scores?.visual ?? 0;
-    node.querySelector(".tags").innerHTML = (item.tags || [])
-      .slice(0, 7)
-      .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
-      .join("");
-    node.querySelector(".meta").innerHTML = [
-      item.source ? `来源：${escapeHtml(item.source)}` : "",
-      item.author ? `作者：${escapeHtml(item.author)}` : "",
-      item.licenseLabel ? `许可：${escapeHtml(item.licenseLabel)}` : "",
-    ]
+    node.querySelector(".meta").innerHTML = compactMeta(item)
       .filter(Boolean)
-      .join("<br>");
-
-    const activeAction = itemFeedbackAction(item);
-    for (const button of node.querySelectorAll(".actions button")) {
-      const action = button.dataset.action;
-      if (activeAction === action) button.dataset.active = "true";
-      button.addEventListener("click", () => submitFeedback(item, action));
-    }
+      .join(" · ");
     container.append(node);
   }
+}
+
+function compactMeta(item) {
+  return [
+    item.source ? escapeHtml(item.source) : "",
+    item.author ? escapeHtml(item.author) : "",
+  ];
+}
+
+function sourceMeta(item) {
+  return [
+    item.source ? `来源：${escapeHtml(item.source)}` : "",
+    item.author ? `作者：${escapeHtml(item.author)}` : "",
+    item.licenseLabel ? `许可：${escapeHtml(item.licenseLabel)}` : "",
+    item.query ? `查询词：${escapeHtml(item.query)}` : "",
+  ];
+}
+
+function renderDetailModal(item) {
+  const strength = strengthFor(item);
+  $("#detailImage").src = imageUrl(item);
+  $("#detailImage").alt = item.title;
+  $("#detailTitle").textContent = item.title;
+  $("#detailPills").innerHTML = [
+    `<span class="type-pill">${escapeHtml(item.inspirationType)}</span>`,
+    `<span class="asset-pill">${escapeHtml(assetTypeFor(item))}</span>`,
+    `<span class="score-pill">推荐强度 ${strength}</span>`,
+  ].join("");
+  $("#detailReason").textContent = item.reason || "这张图有可提炼的视觉或玩法参考。";
+  $("#detailIdea").textContent = item.gameIdea || "试着把图中的空间、物件或反馈拆成一个核心互动规则。";
+  $("#detailCompetitor").value = item.scores?.competitor ?? 0;
+  $("#detailCreative").value = item.scores?.creative ?? 0;
+  $("#detailVisual").value = item.scores?.visual ?? 0;
+  $("#detailTags").innerHTML = (item.tags || [])
+    .slice(0, 12)
+    .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
+    .join("");
+  $("#detailMeta").innerHTML = sourceMeta(item).filter(Boolean).join("<br>");
+  $("#detailSourceLink").href = item.sourceUrl || imageUrl(item);
+
+  const activeAction = itemFeedbackAction(item);
+  for (const button of $$("#detailModal [data-detail-action]")) {
+    const action = button.dataset.detailAction;
+    button.dataset.active = activeAction === action ? "true" : "false";
+    button.onclick = () => submitFeedback(item, action);
+  }
+}
+
+function openDetail(item) {
+  state.detailItem = item;
+  renderDetailModal(item);
+  $("#detailModal").hidden = false;
+  document.body.classList.add("detail-open");
+}
+
+function closeDetail() {
+  state.detailItem = null;
+  $("#detailModal").hidden = true;
+  document.body.classList.remove("detail-open");
 }
 
 function filterHint() {
@@ -313,6 +355,7 @@ async function submitFeedback(item, action) {
   writeLocal(browserKeys.feedback, state.feedback);
   setStatus(actionLabel(action, tag));
   renderToday();
+  if (state.detailItem?.id === item.id) renderDetailModal(item);
   if (state.view === "favorites") await renderFavorites();
 }
 
@@ -493,6 +536,10 @@ async function init() {
     button.addEventListener("click", () => switchView(button.dataset.view)),
   );
   $("#settingsForm").addEventListener("submit", saveSettings);
+  $$("[data-close-detail]").forEach((node) => node.addEventListener("click", closeDetail));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#detailModal").hidden) closeDetail();
+  });
 }
 
 init().catch((error) => {
