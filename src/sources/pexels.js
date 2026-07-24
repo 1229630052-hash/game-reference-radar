@@ -27,6 +27,8 @@ export async function fetchPexelsCandidates(queryPack, { perPage = 8, secrets = 
         licenseLabel: "Pexels License",
         licenseUrl: "https://www.pexels.com/license/",
         inspirationType: queryPack.type,
+        category: queryPack.category,
+        subcategory: queryPack.subcategory,
         tags: ["pexels", queryPack.type, query],
         query,
         width: photo.width,

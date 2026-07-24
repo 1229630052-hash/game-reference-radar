@@ -443,8 +443,11 @@ button {
 }
 
 .asset-pill {
+  max-width: 100%;
+  overflow: hidden;
   background: #f0edff;
   color: #5b42b1;
+  text-overflow: ellipsis;
 }
 
 .score-pill {
@@ -459,6 +462,18 @@ button {
   min-height: 35px;
   font-size: 13px;
   line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 34px;
+  margin: 0;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -513,6 +528,54 @@ button {
   border-left: 4px solid var(--blue);
   border-radius: 10px;
   background: linear-gradient(135deg, #f0f7ff, #fff3fb);
+}
+
+.asset-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 8px;
+}
+
+.asset-thumb {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0;
+  background: #fff;
+  color: var(--muted);
+  text-align: left;
+}
+
+.asset-thumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.asset-thumb span {
+  display: block;
+  overflow: hidden;
+  padding: 5px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.analysis-grid .idea-box {
+  align-content: start;
+  min-height: 104px;
+}
+
+.analysis-grid .wide {
+  grid-column: 1 / -1;
 }
 
 .idea-box strong {
@@ -807,6 +870,10 @@ button {
 
   .detail-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analysis-grid {
+    grid-template-columns: 1fr;
   }
 }
 

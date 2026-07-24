@@ -83,6 +83,9 @@ async function fetchGooglePlayDetails(appId, query, queryPack, country) {
   return images.map((imageUrl, index) => ({
     source: "googleplay",
     sourceId: `${appId}-${country}-${index}`,
+    gameId: `googleplay:${appId}`,
+    gameTitle: title,
+    market: country,
     title: `${title} · Google Play 截图 ${index + 1}`,
     description,
     thumbnailUrl: imageUrl,
@@ -91,6 +94,8 @@ async function fetchGooglePlayDetails(appId, query, queryPack, country) {
     licenseLabel: "Google Play public store asset, check source",
     licenseUrl: sourceUrl,
     inspirationType: queryPack.type,
+    category: queryPack.category,
+    subcategory: queryPack.subcategory,
     tags: [
       "competitor",
       "google play",
@@ -105,7 +110,7 @@ async function fetchGooglePlayDetails(appId, query, queryPack, country) {
   }));
 }
 
-export async function fetchGooglePlayCandidates(queryPack, { perPage = 3 } = {}) {
+export async function fetchGooglePlayCandidates(queryPack, { perPage = 1 } = {}) {
   const candidates = [];
   const countries = ["us"];
 

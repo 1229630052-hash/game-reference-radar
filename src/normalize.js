@@ -36,6 +36,18 @@ export function normalizeCandidate(candidate) {
   const source = candidate.source ?? "unknown";
   const sourceId = String(candidate.sourceId ?? candidate.sourceUrl ?? candidate.thumbnailUrl);
   const assetType = inferAssetType(candidate);
+  const title = candidate.title ?? candidate.description ?? candidate.query ?? "Untitled reference";
+  const gameTitle = candidate.gameTitle ?? String(title).replace(/\s*·\s*(ICON|宣传图|活动图|Google Play 截图|商店截图).*$/i, "");
+  const gameId = String(
+    candidate.gameId ??
+      [
+        source,
+        candidate.sourceUrl?.replace(/[?#].*$/, ""),
+        gameTitle,
+      ]
+        .filter(Boolean)
+        .join(":"),
+  );
   const tags = uniqueTags([
     candidate.inspirationType,
     candidate.query,
@@ -47,7 +59,10 @@ export function normalizeCandidate(candidate) {
     id: stableId(source, sourceId, candidate.sourceUrl, candidate.thumbnailUrl),
     source,
     sourceId,
-    title: candidate.title ?? candidate.description ?? candidate.query ?? "Untitled reference",
+    gameId,
+    gameTitle,
+    market: candidate.market ?? "",
+    title,
     description: candidate.description ?? "",
     thumbnailUrl: candidate.thumbnailUrl ?? "",
     cachedThumbPath: candidate.cachedThumbPath ?? "",
@@ -56,6 +71,8 @@ export function normalizeCandidate(candidate) {
     licenseLabel: candidate.licenseLabel ?? "Check source",
     licenseUrl: candidate.licenseUrl ?? "",
     inspirationType: candidate.inspirationType ?? "场景氛围",
+    category: candidate.category ?? "",
+    subcategory: candidate.subcategory ?? "",
     assetType,
     tags,
     scores: candidate.scores ?? {},

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>竞品灵感策展台</title>
-    <link rel="stylesheet" href="/styles.css?v=20260724-gallery" />
+    <link rel="stylesheet" href="/styles.css?v=20260724-v2" />
   </head>
   <body>
     <div class="app-shell">
@@ -27,26 +27,17 @@
         <div class="control-panel">
           <button id="refreshBtn" class="primary-btn" title="重新生成今日灵感日报">刷新今日推荐</button>
 
-          <div class="field">
-            <span>素材模式</span>
-            <div class="segmented">
-              <button class="segment active" data-board-mode="selected" type="button">今日精选</button>
-              <button class="segment" data-board-mode="explore" type="button">灵感探索池</button>
-            </div>
-          </div>
+          <label class="field">
+            <span>按大品类筛选</span>
+            <select id="categoryFilter">
+              <option value="">全部移动游戏</option>
+            </select>
+          </label>
 
           <label class="field">
-            <span>按游戏品类筛选</span>
-            <select id="gameCategoryFilter">
-              <option value="">全部游戏品类</option>
-              <option value="screw,nuts,bolts,pin">螺丝/插销解谜</option>
-              <option value="goods,sort,triple">货架/整理/分类</option>
-              <option value="match,tile,candy,blast">三消/Tile Match</option>
-              <option value="merge,mansion">合成/庄园</option>
-              <option value="makeover,home,room,decor">装修/改造</option>
-              <option value="hidden,object">找物/清理</option>
-              <option value="parking,jam">停车/堵塞</option>
-              <option value="idle,tycoon,factory">放置/经营</option>
+            <span>按细分玩法筛选</span>
+            <select id="subcategoryFilter">
+              <option value="">全部细分玩法</option>
             </select>
           </label>
 
@@ -80,27 +71,27 @@
         <section id="todayView" class="view active">
           <div class="section-head">
             <div>
-              <h2 id="boardTitle">今日精选 10 张</h2>
-              <p id="boardSubtitle">把竞品素材拆成可执行的玩法、美术和包装想法。</p>
+              <h2 id="boardTitle">竞品灵感库</h2>
+              <p id="boardSubtitle">推荐游戏排在前面，点开查看素材合集和专业拆解。</p>
             </div>
             <span id="sourceSummary" class="summary-pill"></span>
           </div>
 
           <div class="metric-grid" aria-label="今日指标">
             <div class="metric-card">
-              <span>候选素材</span>
+              <span>竞品游戏</span>
               <strong id="metricCandidates">0</strong>
             </div>
             <div class="metric-card">
-              <span>今日精选</span>
+              <span>推荐游戏</span>
               <strong id="metricSelected">0</strong>
             </div>
             <div class="metric-card">
-              <span>灵感探索池</span>
+              <span>素材总数</span>
               <strong id="metricExplore">0</strong>
             </div>
             <div class="metric-card">
-              <span>平均推荐强度</span>
+              <span>去重后素材</span>
               <strong id="metricStrength">0</strong>
             </div>
             <div class="metric-card">
@@ -165,11 +156,11 @@
           </div>
           <form id="settingsForm" class="settings-form">
             <label class="field">
-              <span>每日精选数量</span>
+              <span>推荐置顶参考数量</span>
               <input id="dailyCount" type="number" min="1" max="30" />
             </label>
             <label class="field">
-              <span>灵感探索池数量</span>
+              <span>兼容候选池数量</span>
               <input id="explorationCount" type="number" min="10" max="150" />
             </label>
             <label class="field">
@@ -253,15 +244,16 @@
         <button class="card-open" type="button" title="查看参考详情">
           <img class="card-image" alt="" loading="lazy" />
         </button>
-        <div class="card-body">
-          <div class="card-topline">
-            <span class="type-pill"></span>
-            <span class="asset-pill"></span>
-            <span class="score-pill"></span>
+          <div class="card-body">
+            <div class="card-topline">
+              <span class="type-pill"></span>
+              <span class="asset-pill"></span>
+              <span class="score-pill"></span>
+            </div>
+            <h3></h3>
+            <p class="card-summary"></p>
+            <div class="meta"></div>
           </div>
-          <h3></h3>
-          <div class="meta"></div>
-        </div>
       </article>
     </template>
 
@@ -283,12 +275,41 @@
           <p id="detailReason" class="reason"></p>
           <div class="score-bars">
             <div><span>竞品相关</span><meter id="detailCompetitor" min="0" max="100"></meter></div>
-            <div><span>创意启发</span><meter id="detailCreative" min="0" max="100"></meter></div>
-            <div><span>视觉参考</span><meter id="detailVisual" min="0" max="100"></meter></div>
+            <div><span>玩法借鉴</span><meter id="detailGameplay" min="0" max="100"></meter></div>
+            <div><span>美术包装</span><meter id="detailArt" min="0" max="100"></meter></div>
+            <div><span>素材完整</span><meter id="detailCompleteness" min="0" max="100"></meter></div>
+            <div><span>个人偏好</span><meter id="detailPreference" min="0" max="100"></meter></div>
           </div>
-          <div class="idea-box">
-            <strong>游戏化想法</strong>
-            <p id="detailIdea"></p>
+          <div class="asset-strip" id="detailAssets"></div>
+          <div class="analysis-grid">
+            <div class="idea-box">
+              <strong>可借鉴玩法</strong>
+              <p id="detailGameplayBorrow"></p>
+            </div>
+            <div class="idea-box">
+              <strong>关卡/节奏拆解</strong>
+              <p id="detailPacing"></p>
+            </div>
+            <div class="idea-box">
+              <strong>美术包装</strong>
+              <p id="detailArtPackaging"></p>
+            </div>
+            <div class="idea-box">
+              <strong>UI/反馈参考</strong>
+              <p id="detailUiFeedback"></p>
+            </div>
+            <div class="idea-box">
+              <strong>适合借鉴到什么项目</strong>
+              <p id="detailSuitableProjects"></p>
+            </div>
+            <div class="idea-box">
+              <strong>可改造方案</strong>
+              <p id="detailAdaptation"></p>
+            </div>
+            <div class="idea-box wide">
+              <strong>风险提醒</strong>
+              <p id="detailRisks"></p>
+            </div>
           </div>
           <div id="detailTags" class="tags"></div>
           <div id="detailMeta" class="meta"></div>
@@ -302,6 +323,6 @@
       </section>
     </div>
 
-    <script src="/app.js?v=20260724-gallery" type="module"></script>
+    <script src="/app.js?v=20260724-v2" type="module"></script>
   </body>
 </html>

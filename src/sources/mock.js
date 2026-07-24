@@ -16,12 +16,13 @@ export function fetchMockCandidates(config) {
   const output = [];
   let index = 0;
   for (const [type, title, description, assetType] of mockIdeas) {
-    const query = config.queryPacks
-      ?.find((pack) => pack.type === type)
-      ?.queries?.[0] ?? type;
+    const pack = config.queryPacks?.find((item) => item.type === type);
+    const query = pack?.queries?.[0] ?? type;
     output.push({
       source: "mock",
       sourceId: `mock-${index}`,
+      gameId: `mock:${title}`,
+      gameTitle: title,
       title,
       description,
       thumbnailUrl: `/api/mock-thumb/${encodeURIComponent(type)}/${encodeURIComponent(title)}.svg`,
@@ -30,6 +31,8 @@ export function fetchMockCandidates(config) {
       licenseLabel: "Local mock preview",
       licenseUrl: "",
       inspirationType: type,
+      category: pack?.category,
+      subcategory: pack?.subcategory,
       assetType,
       tags: ["mock", type, query, title, assetType, "casual game", "competitor"],
       query,

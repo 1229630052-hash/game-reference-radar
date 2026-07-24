@@ -28,6 +28,8 @@ export async function fetchUnsplashCandidates(queryPack, { perPage = 8, secrets 
         licenseLabel: "Unsplash License",
         licenseUrl: "https://unsplash.com/license",
         inspirationType: queryPack.type,
+        category: queryPack.category,
+        subcategory: queryPack.subcategory,
         tags: [
           "unsplash",
           queryPack.type,

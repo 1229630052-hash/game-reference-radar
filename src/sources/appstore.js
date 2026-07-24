@@ -22,7 +22,7 @@ function screenshotAssetType(url) {
   return "宣传图";
 }
 
-export async function fetchAppStoreCandidates(queryPack, { perPage = 12 } = {}) {
+export async function fetchAppStoreCandidates(queryPack, { perPage = 5 } = {}) {
   const candidates = [];
   const countries = ["us", "cn"];
 
@@ -43,10 +43,14 @@ export async function fetchAppStoreCandidates(queryPack, { perPage = 12 } = {}) 
         screenshots.forEach((imageUrl, index) => {
           const size = imageSizeFromUrl(imageUrl);
           const assetType = screenshotAssetType(imageUrl);
+          const gameTitle = app.trackName || query;
           candidates.push({
             source: "appstore",
             sourceId: `${app.trackId}-${country}-screenshot-${index}`,
-            title: `${app.trackName || query} · ${assetType} ${index + 1}`,
+            gameId: `appstore:${app.trackId}`,
+            gameTitle,
+            market: country,
+            title: `${gameTitle} · ${assetType} ${index + 1}`,
             description: app.description || "",
             thumbnailUrl: imageUrl,
             sourceUrl: app.trackViewUrl,
@@ -54,6 +58,8 @@ export async function fetchAppStoreCandidates(queryPack, { perPage = 12 } = {}) 
             licenseLabel: "App Store marketing asset, check source",
             licenseUrl: app.trackViewUrl || "",
             inspirationType: queryPack.type,
+            category: queryPack.category,
+            subcategory: queryPack.subcategory,
             assetType,
             tags: [
               "competitor",
@@ -73,10 +79,14 @@ export async function fetchAppStoreCandidates(queryPack, { perPage = 12 } = {}) 
         });
 
         if (iconUrl) {
+          const gameTitle = app.trackName || query;
           candidates.push({
             source: "appstore",
             sourceId: `${app.trackId}-${country}-icon`,
-            title: `${app.trackName || query} · ICON`,
+            gameId: `appstore:${app.trackId}`,
+            gameTitle,
+            market: country,
+            title: `${gameTitle} · ICON`,
             description: app.description || "",
             thumbnailUrl: iconUrl,
             sourceUrl: app.trackViewUrl,
@@ -84,6 +94,8 @@ export async function fetchAppStoreCandidates(queryPack, { perPage = 12 } = {}) 
             licenseLabel: "App Store app icon, check source",
             licenseUrl: app.trackViewUrl || "",
             inspirationType: queryPack.type,
+            category: queryPack.category,
+            subcategory: queryPack.subcategory,
             assetType: "ICON",
             tags: [
               "competitor",

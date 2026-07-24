@@ -4,9 +4,9 @@ const state = {
   config: null,
   secrets: null,
   view: "today",
-  boardMode: "selected",
   detailItem: null,
-  gameCategoryFilter: "",
+  categoryFilter: "",
+  subcategoryFilter: "",
   typeFilter: "",
   assetFilter: "",
   tagSearch: "",
@@ -51,8 +51,7 @@ function setStatus(text) {
 }
 
 function currentItems() {
-  if (state.boardMode === "explore") return state.report?.explorationPool || [];
-  return state.report?.recommendations || [];
+  return state.report?.gameGroups || state.report?.recommendations || [];
 }
 
 function imageUrl(item) {
@@ -72,10 +71,9 @@ function assetTypeFor(item) {
 }
 
 function categoryOk(item) {
-  if (!state.gameCategoryFilter) return true;
-  const keywords = state.gameCategoryFilter.split(",");
-  const text = [item.title, item.description, item.query, ...(item.tags || [])].join(" ").toLowerCase();
-  return keywords.some((keyword) => text.includes(keyword.trim()));
+  if (state.categoryFilter && item.category !== state.categoryFilter) return false;
+  if (state.subcategoryFilter && item.subcategory !== state.subcategoryFilter) return false;
+  return true;
 }
 
 function filteredItems(items) {
@@ -83,11 +81,49 @@ function filteredItems(items) {
   return (items || []).filter((item) => {
     const typeOk = !state.typeFilter || item.inspirationType === state.typeFilter;
     const assetOk = !state.assetFilter || assetTypeFor(item) === state.assetFilter;
-    const tagText = [item.title, item.description, item.reason, item.gameIdea, ...(item.tags || [])]
+    const tagText = [
+      item.title,
+      item.description,
+      item.reason,
+      item.gameIdea,
+      item.category,
+      item.subcategory,
+      item.analysis?.recommendationReason,
+      item.analysis?.gameplayBorrow,
+      item.analysis?.artPackaging,
+      ...(item.tags || []),
+    ]
       .join(" ")
       .toLowerCase();
     return categoryOk(item) && typeOk && assetOk && (!q || tagText.includes(q));
   });
+}
+
+function renderCategoryOptions() {
+  const packs = state.config?.queryPacks || [];
+  const categories = [...new Set(packs.map((pack) => pack.category).filter(Boolean))];
+  const subcategories = [
+    ...new Set(
+      packs
+        .filter((pack) => !state.categoryFilter || pack.category === state.categoryFilter)
+        .map((pack) => pack.subcategory)
+        .filter(Boolean),
+    ),
+  ];
+
+  $("#categoryFilter").innerHTML = [
+    `<option value="">全部移动游戏</option>`,
+    ...categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`),
+  ].join("");
+  $("#categoryFilter").value = categories.includes(state.categoryFilter) ? state.categoryFilter : "";
+  state.categoryFilter = $("#categoryFilter").value;
+
+  $("#subcategoryFilter").innerHTML = [
+    `<option value="">全部细分玩法</option>`,
+    ...subcategories.map((subcategory) => `<option value="${escapeHtml(subcategory)}">${escapeHtml(subcategory)}</option>`),
+  ].join("");
+  $("#subcategoryFilter").value = subcategories.includes(state.subcategoryFilter) ? state.subcategoryFilter : "";
+  state.subcategoryFilter = $("#subcategoryFilter").value;
 }
 
 function renderTypeOptions(items) {
@@ -121,10 +157,10 @@ function sourceSummary(items) {
 function renderMetrics() {
   const stats = state.report?.stats || {};
   const candidateSources = stats.sourceCounts || {};
-  $("#metricCandidates").textContent = stats.candidateCount ?? 0;
-  $("#metricSelected").textContent = stats.selectedCount ?? state.report?.count ?? 0;
-  $("#metricExplore").textContent = stats.explorationCount ?? state.report?.explorationPool?.length ?? 0;
-  $("#metricStrength").textContent = stats.averageStrength ?? 0;
+  $("#metricCandidates").textContent = stats.gameGroupCount ?? currentItems().length ?? 0;
+  $("#metricSelected").textContent = stats.recommendedGameCount ?? currentItems().filter((item) => item.isRecommended).length ?? 0;
+  $("#metricExplore").textContent = stats.candidateCount ?? 0;
+  $("#metricStrength").textContent = stats.dedupedAssetCount ?? stats.scoredCount ?? 0;
   $("#metricAppStore").textContent = candidateSources.appstore || 0;
   $("#metricGooglePlay").textContent = candidateSources.googleplay || 0;
 }
@@ -161,10 +197,11 @@ function renderCards(container, items) {
     openButton.addEventListener("click", () => openDetail(item));
     img.src = imageUrl(item);
     img.alt = item.title;
-    node.querySelector(".type-pill").textContent = item.inspirationType;
-    node.querySelector(".asset-pill").textContent = assetTypeFor(item);
+    node.querySelector(".type-pill").textContent = item.recommendationLevel || item.inspirationType;
+    node.querySelector(".asset-pill").textContent = item.category || item.inspirationType;
     node.querySelector(".score-pill").textContent = strength;
     node.querySelector("h3").textContent = item.title;
+    node.querySelector(".card-summary").textContent = item.reason || "推荐：适合点开查看玩法和美术包装参考。";
     node.querySelector(".meta").innerHTML = compactMeta(item)
       .filter(Boolean)
       .join(" · ");
@@ -173,6 +210,12 @@ function renderCards(container, items) {
 }
 
 function compactMeta(item) {
+  if (item.assetSummary) {
+    return [
+      item.assetSummary.label || `${item.assetSummary.total || 0} 张素材`,
+      (item.sources || [item.source]).filter(Boolean).join(" / "),
+    ];
+  }
   return [
     item.source ? escapeHtml(item.source) : "",
     item.author ? escapeHtml(item.author) : "",
@@ -181,28 +224,40 @@ function compactMeta(item) {
 
 function sourceMeta(item) {
   return [
-    item.source ? `来源：${escapeHtml(item.source)}` : "",
+    item.sources?.length ? `来源：${escapeHtml(item.sources.join(" / "))}` : item.source ? `来源：${escapeHtml(item.source)}` : "",
     item.author ? `作者：${escapeHtml(item.author)}` : "",
     item.licenseLabel ? `许可：${escapeHtml(item.licenseLabel)}` : "",
+    item.category ? `大品类：${escapeHtml(item.category)}` : "",
+    item.subcategory ? `细分玩法：${escapeHtml(item.subcategory)}` : "",
     item.query ? `查询词：${escapeHtml(item.query)}` : "",
   ];
 }
 
 function renderDetailModal(item) {
   const strength = strengthFor(item);
+  const analysis = item.analysis || {};
   $("#detailImage").src = imageUrl(item);
   $("#detailImage").alt = item.title;
   $("#detailTitle").textContent = item.title;
   $("#detailPills").innerHTML = [
-    `<span class="type-pill">${escapeHtml(item.inspirationType)}</span>`,
-    `<span class="asset-pill">${escapeHtml(assetTypeFor(item))}</span>`,
+    `<span class="type-pill">${escapeHtml(item.recommendationLevel || item.inspirationType)}</span>`,
+    `<span class="asset-pill">${escapeHtml(item.category || assetTypeFor(item))}</span>`,
     `<span class="score-pill">推荐强度 ${strength}</span>`,
   ].join("");
-  $("#detailReason").textContent = item.reason || "这张图有可提炼的视觉或玩法参考。";
-  $("#detailIdea").textContent = item.gameIdea || "试着把图中的空间、物件或反馈拆成一个核心互动规则。";
-  $("#detailCompetitor").value = item.scores?.competitor ?? 0;
-  $("#detailCreative").value = item.scores?.creative ?? 0;
-  $("#detailVisual").value = item.scores?.visual ?? 0;
+  $("#detailReason").textContent = analysis.recommendationReason || item.reason || "这张图有可提炼的视觉或玩法参考。";
+  setMeter("#detailCompetitor", item.scores?.competitor ?? 0);
+  setMeter("#detailGameplay", item.scores?.gameplay ?? item.scores?.creative ?? 0);
+  setMeter("#detailArt", item.scores?.art ?? item.scores?.visual ?? 0);
+  setMeter("#detailCompleteness", item.scores?.completeness ?? 0);
+  setMeter("#detailPreference", item.scores?.preference ?? 0);
+  renderAssetStrip(item);
+  $("#detailGameplayBorrow").textContent = analysis.gameplayBorrow || item.gameIdea || "把核心互动拆成目标、阻碍、操作和反馈四段，再换题材复用。";
+  $("#detailPacing").textContent = analysis.pacing || "观察它如何把目标提示、过程阻碍和完成反馈组织成短关卡节奏。";
+  $("#detailArtPackaging").textContent = analysis.artPackaging || "重点看主视觉卖点、色彩层级、角色/道具比例和商店图的第一眼信息。";
+  $("#detailUiFeedback").textContent = analysis.uiFeedback || "拆解按钮、奖励、进度和完成反馈的层级，借鉴信息组织而不是直接照搬。";
+  $("#detailSuitableProjects").textContent = analysis.suitableProjects || "适合用在相近移动游戏品类的立项参考、关卡主题和活动包装验证。";
+  $("#detailAdaptation").textContent = analysis.adaptation || "替换题材和关键素材，保留结构关系，把一个卖点改造成多个关卡变量。";
+  $("#detailRisks").textContent = analysis.risks || "注意商店素材不一定等同真实玩法，避免直接复刻角色、图标、版式和独特资产。";
   $("#detailTags").innerHTML = (item.tags || [])
     .slice(0, 12)
     .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
@@ -215,6 +270,34 @@ function renderDetailModal(item) {
     const action = button.dataset.detailAction;
     button.dataset.active = activeAction === action ? "true" : "false";
     button.onclick = () => submitFeedback(item, action);
+  }
+}
+
+function setMeter(selector, value) {
+  const meter = $(selector);
+  const safeValue = Math.round(Math.min(100, Math.max(0, Number(value) || 0)));
+  meter.value = safeValue;
+  meter.setAttribute("value", String(safeValue));
+}
+
+function renderAssetStrip(item) {
+  const assets = item.items?.length ? item.items : [item];
+  $("#detailAssets").innerHTML = assets
+    .slice(0, 12)
+    .map(
+      (asset) => `
+        <button class="asset-thumb" type="button" data-image="${escapeHtml(imageUrl(asset))}" data-title="${escapeHtml(asset.title)}">
+          <img src="${escapeHtml(imageUrl(asset))}" alt="${escapeHtml(asset.title)}" loading="lazy" />
+          <span>${escapeHtml(asset.assetType || assetTypeFor(asset))}</span>
+        </button>
+      `,
+    )
+    .join("");
+  for (const button of $$("#detailAssets .asset-thumb")) {
+    button.addEventListener("click", () => {
+      $("#detailImage").src = button.dataset.image;
+      $("#detailImage").alt = button.dataset.title;
+    });
   }
 }
 
@@ -233,10 +316,12 @@ function closeDetail() {
 
 function filterHint() {
   const parts = [];
-  const categoryLabel = $("#gameCategoryFilter").selectedOptions[0]?.textContent;
+  const categoryLabel = $("#categoryFilter").selectedOptions[0]?.textContent;
+  const subcategoryLabel = $("#subcategoryFilter").selectedOptions[0]?.textContent;
   const typeLabel = $("#typeFilter").selectedOptions[0]?.textContent;
   const assetLabel = $("#assetFilter").selectedOptions[0]?.textContent;
-  if (state.gameCategoryFilter && categoryLabel) parts.push(categoryLabel);
+  if (state.categoryFilter && categoryLabel) parts.push(categoryLabel);
+  if (state.subcategoryFilter && subcategoryLabel) parts.push(subcategoryLabel);
   if (state.typeFilter && typeLabel) parts.push(typeLabel);
   if (state.assetFilter && assetLabel) parts.push(assetLabel);
   if (state.tagSearch.trim()) parts.push(`关键词：${state.tagSearch.trim()}`);
@@ -248,18 +333,13 @@ function renderToday() {
   const visible = filteredItems(items);
   $("#reportDate").textContent = state.report?.date || "暂无日报";
   $("#sourceSummary").textContent = sourceSummary(items);
-  $("#boardTitle").textContent =
-    state.boardMode === "explore"
-      ? `灵感探索池 ${items.length} 张`
-      : `今日精选 ${state.report?.count || 0} 张`;
-  $("#boardSubtitle").textContent =
-    state.boardMode === "explore"
-      ? "候选素材池适合按品类、用途和关键词继续深挖。"
-      : "把竞品素材拆成可执行的玩法、美术和包装想法。";
+  $("#boardTitle").textContent = `竞品灵感库 ${items.length} 个游戏`;
+  $("#boardSubtitle").textContent = "推荐游戏排在前面，点开查看素材合集、玩法拆解和美术包装分析。";
   renderMetrics();
   renderDigest();
+  renderCategoryOptions();
   renderTypeOptions(items);
-  $("#visibleCount").textContent = `${visible.length} 张素材`;
+  $("#visibleCount").textContent = `${visible.length} 个竞品游戏`;
   $("#filterHint").textContent = filterHint();
   renderCards($("#cardsGrid"), visible);
 }
@@ -271,8 +351,8 @@ async function renderFavorites() {
       .map(([id]) => id),
   );
   const localItems = [
+    ...(state.report?.gameGroups || []),
     ...(state.report?.recommendations || []),
-    ...(state.report?.explorationPool || []),
   ].filter((item) => favoriteIds.has(item.id));
   renderCards($("#favoritesGrid"), localItems);
   setStatus("收藏夹已更新");
@@ -288,10 +368,10 @@ async function renderHistory() {
     return;
   }
   const button = document.createElement("button");
-  button.textContent = `${lastReport.date} · ${lastReport.count} 张精选`;
-  button.addEventListener("click", () => renderCards($("#historyGrid"), lastReport.recommendations || []));
+  button.textContent = `${lastReport.date} · ${lastReport.stats?.gameGroupCount || lastReport.count} 个竞品`;
+  button.addEventListener("click", () => renderCards($("#historyGrid"), lastReport.gameGroups || lastReport.recommendations || []));
   historyList.append(button);
-  renderCards($("#historyGrid"), lastReport.recommendations || []);
+  renderCards($("#historyGrid"), lastReport.gameGroups || lastReport.recommendations || []);
   setStatus("历史日报已更新");
 }
 
@@ -394,7 +474,7 @@ async function refreshToday() {
     });
     writeLocal(browserKeys.lastReport, state.report);
     renderToday();
-    setStatus(`已生成 ${state.report.count} 张精选，灵感探索池 ${state.report.explorationPool?.length || 0} 张`);
+    setStatus(`已生成 ${state.report.stats?.gameGroupCount || state.report.gameGroups?.length || 0} 个竞品游戏，推荐 ${state.report.stats?.recommendedGameCount || 0} 个`);
   } finally {
     $("#refreshBtn").disabled = false;
   }
@@ -462,18 +542,14 @@ function saveBrowserSecrets(update) {
   writeLocal(browserKeys.secrets, next);
 }
 
-function setBoardMode(mode) {
-  state.boardMode = mode;
-  $$(".segment").forEach((button) => button.classList.toggle("active", button.dataset.boardMode === mode));
-  renderToday();
-}
-
 function clearFilters() {
-  state.gameCategoryFilter = "";
+  state.categoryFilter = "";
+  state.subcategoryFilter = "";
   state.typeFilter = "";
   state.assetFilter = "";
   state.tagSearch = "";
-  $("#gameCategoryFilter").value = "";
+  $("#categoryFilter").value = "";
+  $("#subcategoryFilter").value = "";
   $("#typeFilter").value = "";
   $("#assetFilter").value = "";
   $("#tagSearch").value = "";
@@ -509,15 +585,17 @@ async function init() {
   state.secrets = secrets;
   if (state.report) writeLocal(browserKeys.lastReport, state.report);
   renderToday();
-  setStatus(`已加载 ${state.report?.count || 0} 张精选，灵感探索池 ${state.report?.explorationPool?.length || 0} 张`);
+  setStatus(`已加载 ${state.report?.stats?.gameGroupCount || state.report?.gameGroups?.length || 0} 个竞品游戏，推荐 ${state.report?.stats?.recommendedGameCount || 0} 个`);
 
   $("#refreshBtn").addEventListener("click", refreshToday);
   $("#clearFiltersBtn").addEventListener("click", clearFilters);
-  $$(".segment").forEach((button) =>
-    button.addEventListener("click", () => setBoardMode(button.dataset.boardMode)),
-  );
-  $("#gameCategoryFilter").addEventListener("change", (event) => {
-    state.gameCategoryFilter = event.target.value;
+  $("#categoryFilter").addEventListener("change", (event) => {
+    state.categoryFilter = event.target.value;
+    state.subcategoryFilter = "";
+    renderToday();
+  });
+  $("#subcategoryFilter").addEventListener("change", (event) => {
+    state.subcategoryFilter = event.target.value;
     renderToday();
   });
   $("#typeFilter").addEventListener("change", (event) => {

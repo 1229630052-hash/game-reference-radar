@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyFeedbackEvent, defaultFeedback } from "../src/feedback.js";
+import { buildGameGroups } from "../src/gameGroups.js";
 import { dedupeCandidates } from "../src/normalize.js";
 import { generateRecommendations, selectDiverseCandidates } from "../src/recommender.js";
 import { scoreCandidate } from "../src/scorer.js";
@@ -92,7 +93,39 @@ test("generateRecommendations works without network or API keys", async () => {
   });
   assert.equal(report.date, "2026-07-08");
   assert.equal(report.recommendations.length, 10);
+  assert.ok(report.gameGroups.length > 0);
+  assert.ok(report.gameGroups.every((group) => group.analysis?.gameplayBorrow && group.analysis?.artPackaging));
   assert.ok(report.recommendations.every((item) => item.reason && item.gameIdea));
+});
+
+test("buildGameGroups merges multiple assets from the same game", () => {
+  const items = [
+    testCandidate("app-1-icon", "appstore", 1.2, {
+      gameId: "appstore:100",
+      gameTitle: "Puzzle Sample",
+      assetType: "ICON",
+    }),
+    testCandidate("app-1-shot", "appstore", 1.4, {
+      gameId: "appstore:100",
+      gameTitle: "Puzzle Sample",
+      assetType: "宣传图",
+    }),
+    testCandidate("gp-1-shot", "googleplay", 1.1, {
+      gameId: "googleplay:com.sample",
+      gameTitle: "Other Sample",
+      assetType: "活动图",
+    }),
+  ];
+
+  const groups = buildGameGroups(items, { feedback: defaultFeedback, date: "2026-07-24" });
+
+  assert.equal(groups.length, 2);
+  const appGroup = groups.find((group) => group.gameId === "appstore:100");
+  assert.equal(appGroup.items.length, 2);
+  assert.equal(appGroup.assetSummary.icon, 1);
+  assert.equal(appGroup.assetSummary.promo, 1);
+  assert.ok(appGroup.recommendationLevel);
+  assert.ok(appGroup.analysis.risks);
 });
 
 test("selectDiverseCandidates keeps key store sources visible", () => {
@@ -127,16 +160,20 @@ test("selectDiverseCandidates rotates high-score candidates by date", () => {
   assert.notDeepEqual(nextDay, firstDay);
 });
 
-function testCandidate(id, source, total) {
+function testCandidate(id, source, total, overrides = {}) {
   return {
     id,
     source,
     sourceId: id,
+    gameId: overrides.gameId || `${source}:${id}`,
+    gameTitle: overrides.gameTitle || id,
     sourceUrl: `https://example.com/${id}`,
-    title: id,
+    title: overrides.title || id,
     description: id,
     inspirationType: "玩法机制",
-    assetType: "宣传图",
+    category: overrides.category || "解谜益智",
+    subcategory: overrides.subcategory || "螺丝/插销解谜",
+    assetType: overrides.assetType || "宣传图",
     tags: ["puzzle"],
     thumbnailUrl: `/thumbs/${id}.jpg`,
     scores: {

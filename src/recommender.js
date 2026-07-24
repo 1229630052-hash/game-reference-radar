@@ -14,6 +14,7 @@ import { fetchOpenverseCandidates } from "./sources/openverse.js";
 import { fetchPexelsCandidates } from "./sources/pexels.js";
 import { fetchPinterestCandidates } from "./sources/pinterest.js";
 import { fetchUnsplashCandidates } from "./sources/unsplash.js";
+import { buildGameGroups } from "./gameGroups.js";
 
 export async function collectCandidates(config, { useNetwork = true, secrets = {} } = {}) {
   const errors = [];
@@ -37,15 +38,25 @@ export async function collectCandidates(config, { useNetwork = true, secrets = {
     if (Number(config.sourceWeights?.openverse ?? 0) > 0) sourceFns.push(fetchOpenverseCandidates);
   }
 
+  const queryBudgetPerPack = Math.max(1, Number(config.queryBudgetPerPack ?? 1));
+  const sourceTimeoutMs = Math.max(1000, Number(config.sourceTimeoutMs ?? 7000));
+  const tasks = [];
   for (const queryPack of config.queryPacks ?? []) {
+    const activeQueryPack = {
+      ...queryPack,
+      queries: (queryPack.queries ?? []).slice(0, queryBudgetPerPack),
+    };
     for (const fn of sourceFns) {
-      try {
-        batches.push(await fn(queryPack, { secrets }));
-      } catch (error) {
-        errors.push(`${fn.name}:${queryPack.type}:${error.message}`);
-      }
+      tasks.push(async () => {
+        try {
+          batches.push(await withTimeout(fn(activeQueryPack, { secrets }), sourceTimeoutMs));
+        } catch (error) {
+          errors.push(`${fn.name}:${activeQueryPack.type}:${error.message}`);
+        }
+      });
     }
   }
+  await runWithConcurrency(tasks, Number(config.requestConcurrency ?? 4));
 
   try {
     batches.push(await fetchManualCandidates());
@@ -65,6 +76,24 @@ export async function collectCandidates(config, { useNetwork = true, secrets = {
     candidates: dedupeCandidates(batches.flat()),
     errors,
   };
+}
+
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs),
+    ),
+  ]);
+}
+
+async function runWithConcurrency(tasks, concurrency) {
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async (_, workerIndex) => {
+    for (let index = workerIndex; index < tasks.length; index += concurrency) {
+      await tasks[index]();
+    }
+  });
+  await Promise.all(workers);
 }
 
 const requiredVisibleSources = ["appstore", "googleplay"];
@@ -236,7 +265,7 @@ function topEntries(counts, limit = 3) {
     .slice(0, limit);
 }
 
-function buildStats({ candidates, scored, recommendations, explorationPool, errors }) {
+function buildStats({ candidates, scored, recommendations, explorationPool, gameGroups, errors }) {
   const averageStrength = recommendations.length
     ? Math.round(
         recommendations.reduce((sum, item) => sum + Number(item.scores?.strength ?? 0), 0) /
@@ -249,6 +278,9 @@ function buildStats({ candidates, scored, recommendations, explorationPool, erro
     scoredCount: scored.length,
     selectedCount: recommendations.length,
     explorationCount: explorationPool.length,
+    gameGroupCount: gameGroups.length,
+    recommendedGameCount: gameGroups.filter((group) => group.isRecommended).length,
+    dedupedAssetCount: gameGroups.reduce((sum, group) => sum + Number(group.assetSummary?.total ?? 0), 0),
     averageStrength,
     sourceCounts: countBy(scored, "source"),
     selectedSourceCounts: countBy(recommendations, "source"),
@@ -270,9 +302,9 @@ function buildSummary(stats, recommendations) {
 
   return {
     headline: `今日重点关注 ${focus}`,
-    text: `今日从 ${stats.candidateCount} 个候选里精选 ${stats.selectedCount} 张，平均推荐强度 ${stats.averageStrength}。素材以 ${assets} 为主，来源分布：${sources}。建议优先拆解${strongest ? `《${strongest.title}》` : "前三张"}的玩法结构和包装表达。`,
+    text: `今日从 ${stats.candidateCount} 个候选里整理出 ${stats.gameGroupCount} 个竞品游戏，其中 ${stats.recommendedGameCount} 个带推荐标签。素材以 ${assets} 为主，来源分布：${sources}。建议优先拆解${strongest ? `《${strongest.gameTitle || strongest.title}》` : "前排推荐"}的玩法结构和包装表达。`,
     bullets: [
-      `灵感探索池保留 ${stats.explorationCount} 张候选，适合继续按品类和素材用途筛选。`,
+      `首页已合并重复素材，同一游戏的 ICON、截图和活动图会收进详情合集。`,
       stats.errorCount > 0
         ? `有 ${stats.errorCount} 个来源请求失败，已用其他来源补足推荐。`
         : "本次抓取没有阻断性错误。",
@@ -302,7 +334,7 @@ export async function generateRecommendations(options = {}) {
     .sort((a, b) => b.scores.total - a.scores.total);
 
   const selected = selectDiverseCandidates(scored, config, date);
-  const enriched = options.useNetwork === false ? selected : await enrichWithOpenAI(selected, secrets);
+  const enriched = selected;
   const recommendations = await cacheRecommendationThumbnails(enriched);
   const selectedIds = new Set(recommendations.map((item) => item.id));
   const explorationLimit = Number(config.explorationCount ?? 60);
@@ -316,7 +348,15 @@ export async function generateRecommendations(options = {}) {
     explorationCandidates,
     explorationLimit,
   );
-  const stats = buildStats({ candidates, scored, recommendations, explorationPool, errors });
+  const rawGameGroups = buildGameGroups(scored, { feedback, date });
+  const aiInsightLimit = Math.max(0, Number(config.aiInsightLimit ?? 12));
+  const enrichedGameGroupSample =
+    options.useNetwork === false
+      ? rawGameGroups.slice(0, aiInsightLimit)
+      : await enrichWithOpenAI(rawGameGroups.slice(0, aiInsightLimit), secrets);
+  const enrichedGroupsById = new Map(enrichedGameGroupSample.map((group) => [group.id, group]));
+  const gameGroups = rawGameGroups.map((group) => enrichedGroupsById.get(group.id) ?? group);
+  const stats = buildStats({ candidates, scored, recommendations, explorationPool, gameGroups, errors });
 
   return {
     date,
@@ -327,5 +367,6 @@ export async function generateRecommendations(options = {}) {
     summary: buildSummary(stats, recommendations),
     recommendations,
     explorationPool,
+    gameGroups,
   };
 }

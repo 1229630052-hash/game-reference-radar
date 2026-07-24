@@ -26,6 +26,8 @@ export async function fetchOpenverseCandidates(queryPack, { perPage = 8 } = {}) 
         licenseLabel: image.license || "Open license",
         licenseUrl: image.license_url || "",
         inspirationType: queryPack.type,
+        category: queryPack.category,
+        subcategory: queryPack.subcategory,
         tags: [
           "openverse",
           queryPack.type,

@@ -29,7 +29,7 @@ export async function cacheThumbnail(item) {
   if (!item.thumbnailUrl || item.thumbnailUrl.startsWith("/")) return item;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(item.thumbnailUrl, {
       signal: controller.signal,
@@ -57,9 +57,5 @@ export async function cacheThumbnail(item) {
 }
 
 export async function cacheRecommendationThumbnails(items) {
-  const output = [];
-  for (const item of items) {
-    output.push(await cacheThumbnail(item));
-  }
-  return output;
+  return Promise.all(items.map((item) => cacheThumbnail(item)));
 }

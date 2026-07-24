@@ -112,7 +112,7 @@ async function loadTodayReport(config) {
   const filePath = recommendationPath(date);
   if (await fileExists(filePath)) {
     const report = await readJson(filePath, null);
-    if (report?.stats && Array.isArray(report.explorationPool)) return report;
+    if (report?.stats && Array.isArray(report.explorationPool) && Array.isArray(report.gameGroups)) return report;
   }
   return runDaily({ notify: false });
 }

@@ -26,15 +26,18 @@ function normalizeBaseUrl(value) {
   return (value || "https://api.openai.com/v1").replace(/\/+$/, "");
 }
 
-async function postJson(url, apiKey, payload) {
+async function postJson(url, apiKey, payload, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const response = await fetch(url, {
     method: "POST",
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-  });
+  }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from ${url}`);
@@ -52,15 +55,19 @@ export async function enrichWithOpenAI(items, secrets = {}) {
     secrets.openaiBaseUrl || process.env.OPENAI_BASE_URL,
   );
   const systemPrompt =
-    "You are a game creative curation assistant. Output only a JSON array. Each item must include id, reason, and gameIdea. Write in concise Chinese.";
-  const userPrompt = `Write inspiration notes for these game reference images. reason explains why the image is worth recommending; gameIdea explains how to turn it into gameplay, level, art, or UI inspiration.\n${JSON.stringify(
+    "You are a senior mobile game competitor analysis assistant. Output only a JSON array. Each item must include id, reason, gameIdea, and analysis. analysis must include recommendationReason, gameplayBorrow, pacing, artPackaging, uiFeedback, suitableProjects, adaptation, and risks. Write concise professional Chinese.";
+  const userPrompt = `Write professional inspiration notes for these mobile game competitor references. Focus on gameplay borrowability and art packaging. reason is a one-line card summary; gameIdea is the most useful gameplay borrowing point; analysis is the detail view structure.\n${JSON.stringify(
     items.map((item) => ({
       id: item.id,
       title: item.title,
       description: item.description,
       inspirationType: item.inspirationType,
+      category: item.category,
+      subcategory: item.subcategory,
+      assetSummary: item.assetSummary,
       tags: item.tags,
       source: item.source,
+      sources: item.sources,
       query: item.query,
     })),
   )}`;
@@ -95,6 +102,7 @@ export async function enrichWithOpenAI(items, secrets = {}) {
         ...item,
         reason: insight.reason || item.reason,
         gameIdea: insight.gameIdea || item.gameIdea,
+        analysis: insight.analysis ? { ...(item.analysis ?? {}), ...insight.analysis } : item.analysis,
         scores: {
           ...item.scores,
           ai: 1,
